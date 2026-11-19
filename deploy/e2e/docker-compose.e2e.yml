@@ -1,0 +1,14 @@
+# Ajustes para la prueba de extremo a extremo (scripts/e2e.sh): dominio de
+# pruebas con la autoridad interna de Caddy y un equipo Ubuntu que se inscribe.
+services:
+  caddy:
+    volumes:
+      - ./e2e/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      default:
+        aliases: [mdm.test]
+
+  agent:
+    image: ubuntu:24.04
+    command: ["sleep", "infinity"]
+    depends_on: [caddy]

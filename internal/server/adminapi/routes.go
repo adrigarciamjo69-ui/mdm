@@ -1,0 +1,156 @@
+package adminapi
+
+import (
+	"github.com/go-chi/chi/v5"
+
+	"mdm/internal/server/auth"
+)
+
+// routes registra los recursos de la consola con su rol mínimo.
+func (a *api) routes(r chi.Router) {
+	read := a.requireSession(auth.RoleReadonly)
+	operate := a.requireSession(auth.RoleOperator)
+
+	r.With(read).Get("/groups", a.listGroups)
+	r.With(operate).Post("/groups", a.createGroup)
+	r.With(operate).Post("/groups/preview", a.previewGroup)
+	r.With(operate).Patch("/groups/{id}", a.updateGroup)
+	r.With(operate).Delete("/groups/{id}", a.deleteGroup)
+
+	admin := a.requireSession(auth.RoleAdmin)
+
+	r.With(read).Get("/summary", a.summary)
+	r.With(read).Get("/devices", a.listDevices)
+	r.With(read).Get("/devices.csv", a.exportDevices)
+	r.With(read).Get("/devices/{id}", a.getDevice)
+	r.With(read).Get("/devices/{id}/software", a.deviceSoftware)
+	r.With(read).Get("/devices/{id}/activity", a.deviceActivity)
+	r.With(read).Get("/devices/{id}/compliance", a.deviceCompliance)
+	r.With(read).Get("/devices/{id}/recovery-keys", a.listRecoveryKeys)
+	r.With(admin).Post("/devices/{id}/recovery-keys/{key_id}/reveal", a.revealRecoveryKey)
+	r.With(operate).Patch("/devices/{id}", a.patchDevice)
+	r.With(admin).Post("/devices/{id}/revoke", a.revokeDevice)
+	r.With(admin).Delete("/devices/{id}", a.deleteDevice)
+
+	r.With(operate).Get("/enrollment-tokens", a.listTokens)
+	r.With(operate).Post("/enrollment-tokens", a.createToken)
+	r.With(operate).Post("/enrollment-tokens/{id}/revoke", a.revokeToken)
+
+	r.With(admin).Get("/admins", a.listAdmins)
+	r.With(admin).Post("/admins", a.createAdmin)
+	r.With(admin).Patch("/admins/{id}", a.updateAdmin)
+	r.With(admin).Get("/audit", a.listAudit)
+
+	r.With(read).Get("/policies", a.listPolicies)
+	r.With(read).Get("/policy-catalog", a.policyCatalog)
+	r.With(admin).Post("/policies", a.createPolicy)
+	r.With(admin).Post("/policies/reorder", a.reorderPolicies)
+	r.With(read).Get("/policies/{id}", a.getPolicy)
+	r.With(read).Get("/policies/{id}/devices", a.policyDevices)
+	r.With(admin).Patch("/policies/{id}", a.updatePolicy)
+	r.With(admin).Delete("/policies/{id}", a.deletePolicy)
+	r.With(admin).Put("/policies/{id}/assignments", a.setPolicyAssignments)
+
+	r.With(admin).Post("/files", a.uploadFile)
+	r.With(read).Get("/apps", a.listApps)
+	r.With(admin).Post("/apps", a.createApp)
+	r.With(read).Get("/apps/{id}", a.getApp)
+	r.With(admin).Patch("/apps/{id}", a.updateApp)
+	r.With(admin).Post("/apps/{id}/archive", a.archiveApp)
+	r.With(read).Get("/apps/{id}/versions", a.listAppVersions)
+	r.With(admin).Post("/apps/{id}/versions", a.addAppVersion)
+	r.With(admin).Post("/apps/{id}/versions/{vid}/current", a.setCurrentAppVersion)
+	r.With(read).Get("/deployments", a.listDeployments)
+	r.With(admin).Post("/deployments", a.createDeployment)
+	r.With(read).Get("/deployments/{id}", a.getDeployment)
+	r.With(admin).Patch("/deployments/{id}", a.updateDeployment)
+	r.With(admin).Delete("/deployments/{id}", a.deleteDeployment)
+	r.With(admin).Put("/deployments/{id}/assignments", a.setDeploymentAssignments)
+	r.With(read).Get("/deployments/{id}/status", a.deploymentStatus)
+	r.With(operate).Post("/deployments/{id}/retry", a.retryDeployment)
+	r.With(read).Get("/devices/{id}/deployments", a.deviceDeployments)
+	r.With(read).Get("/updates", a.listUpdates)
+	r.With(admin).Put("/updates/{id}/approval", a.setUpdateApproval)
+	r.With(read).Get("/patch-policies", a.listPatchPolicies)
+	r.With(admin).Post("/patch-policies", a.createPatchPolicy)
+	r.With(admin).Post("/patch-policies/reorder", a.reorderPatchPolicies)
+	r.With(read).Get("/patch-policies/{id}", a.getPatchPolicy)
+	r.With(admin).Patch("/patch-policies/{id}", a.updatePatchPolicy)
+	r.With(admin).Delete("/patch-policies/{id}", a.deletePatchPolicy)
+	r.With(admin).Put("/patch-policies/{id}/assignments", a.setPatchPolicyAssignments)
+	r.With(read).Get("/devices/{id}/updates", a.deviceUpdates)
+
+	r.With(read).Get("/scripts", a.listScripts)
+	r.With(admin).Post("/scripts", a.createScript)
+	r.With(read).Get("/scripts/{id}", a.getScript)
+	r.With(admin).Patch("/scripts/{id}", a.updateScript)
+	r.With(admin).Post("/scripts/{id}/versions", a.addScriptVersion)
+	r.With(read).Get("/scripts/{id}/versions", a.listScriptVersions)
+	r.With(read).Get("/scripts/{id}/versions/{version}", a.getScriptVersion)
+	r.With(admin).Post("/scripts/{id}/archive", a.archiveScript)
+
+	// El rol de /batches depende del tipo de orden; lo comprueba el manejador.
+	r.With(operate).Post("/batches", a.createBatch)
+	r.With(read).Get("/batches", a.listBatches)
+	r.With(read).Get("/batches/{id}", a.getBatch)
+	r.With(read).Get("/devices/{id}/commands", a.deviceCommands)
+	r.With(read).Get("/commands/{id}", a.getCommand)
+	r.With(operate).Post("/commands/{id}/cancel", a.cancelCommand)
+
+	r.With(read).Get("/agent-releases", a.agentReleases)
+	r.With(admin).Put("/agent-pins/{group_id}", a.putAgentPin)
+	r.With(admin).Delete("/agent-pins/{group_id}", a.deleteAgentPin)
+
+	r.With(admin).Get("/jobs", a.listJobs)
+
+	r.With(admin).Get("/integrations/android", a.androidStatus)
+	r.With(admin).Put("/integrations/android/key", a.putAndroidKey)
+	r.With(admin).Post("/integrations/android/signup", a.androidSignup)
+	r.With(admin).Delete("/integrations/android", a.androidUnlink)
+	// Sin sesión: la vuelta desde Google la protege un state de un solo uso.
+	r.Get("/integrations/android/callback", a.androidCallback)
+	r.With(read).Get("/android/enrollment-tokens", a.listAndroidTokens)
+	r.With(operate).Post("/android/enrollment-tokens", a.createAndroidToken)
+	r.With(operate).Post("/android/enrollment-tokens/{id}/revoke", a.revokeAndroidToken)
+
+	r.With(admin).Get("/integrations/email", a.getEmailConfig)
+	r.With(admin).Put("/integrations/email", a.putEmailConfig)
+	r.With(admin).Post("/integrations/email/test", a.testEmail)
+	r.With(read).Get("/channels", a.listChannels)
+	r.With(admin).Post("/channels", a.createChannel)
+	r.With(admin).Patch("/channels/{id}", a.updateChannel)
+	r.With(admin).Delete("/channels/{id}", a.deleteChannel)
+	r.With(admin).Post("/channels/{id}/test", a.testChannel)
+
+	r.With(read).Get("/alert-rules", a.listAlertRules)
+	r.With(admin).Post("/alert-rules", a.createAlertRule)
+	r.With(admin).Patch("/alert-rules/{id}", a.updateAlertRule)
+	r.With(admin).Delete("/alert-rules/{id}", a.deleteAlertRule)
+	r.With(read).Get("/alerts", a.listAlerts)
+	r.With(read).Get("/alerts/counts", a.alertCounts)
+	r.With(read).Get("/alerts/{id}", a.getAlert)
+	r.With(operate).Post("/alerts/{id}/acknowledge", a.acknowledgeAlert)
+	r.With(operate).Post("/alerts/{id}/resolve", a.resolveAlert)
+
+	r.With(read).Get("/reports", a.listReports)
+	r.With(read).Get("/reports/{name}", a.runReport)
+	r.With(read).Get("/report-schedules", a.listReportSchedules)
+	r.With(operate).Post("/report-schedules", a.createReportSchedule)
+	r.With(operate).Patch("/report-schedules/{id}", a.updateReportSchedule)
+	r.With(operate).Delete("/report-schedules/{id}", a.deleteReportSchedule)
+
+	r.With(read).Get("/automations", a.listAutomations)
+	r.With(operate).Post("/automations", a.createAutomation)
+	r.With(read).Get("/automations/{id}", a.getAutomation)
+	r.With(operate).Patch("/automations/{id}", a.updateAutomation)
+	r.With(operate).Delete("/automations/{id}", a.deleteAutomation)
+	r.With(read).Post("/automations/{id}/simulate", a.simulateAutomation)
+	r.With(read).Get("/automations/{id}/runs", a.automationRuns)
+
+	r.With(read).Get("/metrics", a.getMetrics)
+	r.With(read).Get("/me/preferences", a.getPreferences)
+	r.With(read).Put("/me/preferences", a.putPreferences)
+
+	r.With(read).Get("/settings", a.getSettings)
+	r.With(admin).Put("/settings", a.putSettings)
+}

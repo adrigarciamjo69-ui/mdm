@@ -1,0 +1,65 @@
+# Despliegue de producción. Ver docs/despliegue.md.
+#   cp .env.example .env   # y rellénalo
+#   docker compose up -d --build
+
+name: mdm
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mdm
+      POSTGRES_DB: mdm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mdm -d mdm"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        VERSION: ${MDM_VERSION:-2.0.0}
+    image: mdm-server:${MDM_VERSION:-2.0.0}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MDM_DATABASE_URL: postgres://mdm:${POSTGRES_PASSWORD}@db:5432/mdm?sslmode=disable
+      MDM_PUBLIC_URL: https://${MDM_DOMAIN:?Falta MDM_DOMAIN en .env}
+      MDM_TRUSTED_PROXY: "true"
+      MDM_SECRET_KEY: ${MDM_SECRET_KEY:?Falta MDM_SECRET_KEY en .env}
+      MDM_FILES_DIR: /data/files
+    volumes:
+      # Instaladores subidos a la consola: entra en las copias de seguridad.
+      - files:/data/files
+    # Sin puertos publicados: solo Caddy llega al servidor.
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      MDM_DOMAIN: ${MDM_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  files:
+  caddy_data:
+  caddy_config:

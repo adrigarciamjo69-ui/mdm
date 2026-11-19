@@ -1,0 +1,83 @@
+# Despliegue con Dokploy (ver docs/dokploy.md). Está en la raíz del
+# repositorio a propósito: así el .env que crea Dokploy con las variables de
+# la pestaña «Environment» queda junto al fichero y Compose lo encuentra.
+#
+# El enrutamiento lo hacen las etiquetas de Traefik de este fichero: NO añadas
+# el dominio en la pestaña «Domains» (crearía rutas sin la restricción).
+#   - Desde cualquier sitio: lo que usan los equipos (/agent/v1, /downloads,
+#     /healthz).
+#   - Solo desde MDM_ADMIN_RANGES: la consola y su API.
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mdm
+      POSTGRES_DB: mdm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mdm -d mdm"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  server:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args:
+        VERSION: ${MDM_VERSION:-2.0.0}
+    image: mdm-server:${MDM_VERSION:-2.0.0}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MDM_DATABASE_URL: postgres://mdm:${POSTGRES_PASSWORD}@db:5432/mdm?sslmode=disable
+      MDM_PUBLIC_URL: https://${MDM_DOMAIN:?Falta MDM_DOMAIN}
+      # Traefik añade la IP del cliente al final de X-Forwarded-For.
+      MDM_TRUSTED_PROXY: "true"
+      MDM_SECRET_KEY: ${MDM_SECRET_KEY:?Falta MDM_SECRET_KEY}
+      MDM_FILES_DIR: /data/files
+    volumes:
+      - files:/data/files
+    expose:
+      - "8080"
+    networks:
+      - default
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.services.mdm.loadbalancer.server.port=8080
+      # http → https (el reto de Let's Encrypt lo atiende Traefik antes que esto).
+      - traefik.http.middlewares.mdm-https.redirectscheme.scheme=https
+      - traefik.http.routers.mdm-http.rule=Host(`${MDM_DOMAIN}`)
+      - traefik.http.routers.mdm-http.entrypoints=web
+      - traefik.http.routers.mdm-http.middlewares=mdm-https
+      - traefik.http.routers.mdm-http.service=mdm
+      # Equipos: desde cualquier sitio.
+      - traefik.http.routers.mdm-agentes.rule=Host(`${MDM_DOMAIN}`) && (PathPrefix(`/agent/v1/`) || PathPrefix(`/downloads/`) || Path(`/healthz`))
+      - traefik.http.routers.mdm-agentes.entrypoints=websecure
+      - traefik.http.routers.mdm-agentes.tls.certresolver=letsencrypt
+      - traefik.http.routers.mdm-agentes.priority=100
+      - traefik.http.routers.mdm-agentes.service=mdm
+      # Consola: solo desde la red interna (y la VPN).
+      - traefik.http.middlewares.mdm-interna.ipallowlist.sourcerange=${MDM_ADMIN_RANGES:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      - traefik.http.routers.mdm-consola.rule=Host(`${MDM_DOMAIN}`)
+      - traefik.http.routers.mdm-consola.entrypoints=websecure
+      - traefik.http.routers.mdm-consola.tls.certresolver=letsencrypt
+      - traefik.http.routers.mdm-consola.priority=10
+      - traefik.http.routers.mdm-consola.middlewares=mdm-interna
+      - traefik.http.routers.mdm-consola.service=mdm
+
+networks:
+  dokploy-network:
+    external: true
+
+volumes:
+  pgdata:
+  files:

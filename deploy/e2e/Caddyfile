@@ -1,0 +1,4 @@
+mdm.test {
+	tls internal
+	reverse_proxy server:8080
+}

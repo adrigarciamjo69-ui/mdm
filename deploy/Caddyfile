@@ -1,0 +1,5 @@
+# Caddy obtiene y renueva el certificado del dominio automáticamente.
+{$MDM_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy server:8080
+}

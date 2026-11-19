@@ -1,0 +1,8 @@
+.git
+.superpowers
+dist
+web/node_modules
+web/dist/assets
+web/dist/index.html
+done.sh
+*.log

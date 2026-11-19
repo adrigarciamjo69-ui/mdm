@@ -1,0 +1,14 @@
+{"blockdevices": [
+  {"name": "nvme0n1", "type": "disk", "mountpoints": [null], "children": [
+    {"name": "nvme0n1p1", "type": "part", "mountpoints": ["/boot/efi"]},
+    {"name": "nvme0n1p2", "type": "part", "mountpoints": ["/boot"]},
+    {"name": "nvme0n1p3", "type": "part", "mountpoints": [null], "children": [
+      {"name": "cryptroot", "type": "crypt", "mountpoints": [null], "children": [
+        {"name": "vg-root", "type": "lvm", "mountpoints": ["/", "/var/snap/x"]}
+      ]}
+    ]}
+  ]},
+  {"name": "sdb", "type": "disk", "mountpoints": [null], "children": [
+    {"name": "sdb1", "type": "part", "mountpoints": ["/mnt/datos compartidos"]}
+  ]}
+]}
