@@ -88,19 +88,18 @@ describe("Ficha de dispositivo", () => {
     expect(screen.getByText(/todavía no ha enviado su inventario/)).toBeInTheDocument();
   });
 
-  it("un operador edita grupo, usuario y etiquetas y ve «Cambios guardados.»", async () => {
+  it("un operador edita grupo y etiquetas y ve «Cambios guardados.»", async () => {
     const calls = setup("operator");
     renderApp("/dispositivos/d1");
     const user = userEvent.setup();
     await screen.findByRole("option", { name: "Ventas" });
     await user.selectOptions(screen.getByLabelText("Grupo"), "g2");
-    await user.clear(screen.getByLabelText("Usuario asignado"));
-    await user.type(screen.getByLabelText("Usuario asignado"), "luis");
+    expect(screen.queryByRole("textbox", { name: "Usuario asignado" })).toBeNull(); // la persona se cambia en la pestaña Activo
     await user.clear(screen.getByLabelText("Etiquetas"));
     await user.type(screen.getByLabelText("Etiquetas"), "vip, planta-3");
     await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(await screen.findByText("Cambios guardados.")).toBeInTheDocument();
-    expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ group_id: "g2", assigned_user: "luis", tags: ["vip", "planta-3"] });
+    expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ group_id: "g2", tags: ["vip", "planta-3"] });
   });
 
   it("guardar sin cambios no llama al servidor", async () => {
@@ -152,7 +151,7 @@ describe("Ficha de dispositivo", () => {
     await user.type(within(dialog).getByRole("textbox"), "7");
     expect(confirm).toBeEnabled();
     await user.click(confirm);
-    await waitFor(() => expect(location()).toBe("/dispositivos"));
+    await waitFor(() => expect(location()).toBe("/inventario?origin=agent"));
     expect(calls.some((c) => c.method === "DELETE" && c.path === "/devices/d1")).toBe(true);
   });
 
@@ -160,7 +159,7 @@ describe("Ficha de dispositivo", () => {
     mockApi({ "GET /auth/me": { body: me() }, "GET /groups": { body: [] }, "GET /devices/d1": apiError(404, "not_found", "Este dispositivo ya no existe.") });
     renderApp("/dispositivos/d1");
     expect(await screen.findByText("Este dispositivo ya no existe.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Volver a dispositivos" })).toHaveAttribute("href", "/dispositivos");
+    expect(screen.getByRole("link", { name: "Volver al inventario" })).toHaveAttribute("href", "/inventario?origin=agent");
   });
 
   it("muestra la actividad de las últimas horas", async () => {

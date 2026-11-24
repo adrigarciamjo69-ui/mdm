@@ -1,4 +1,4 @@
-import type { Device, DeviceDetail, Inventory, Page, Summary } from "../api/types";
+import type { Asset, Device, DeviceDetail, Inventory, Page, Summary } from "../api/types";
 
 export const me = (role: "admin" | "operator" | "readonly" = "admin") => ({ id: "a1", email: "ana@ejemplo.es", role, csrf_token: "csrf" });
 
@@ -51,4 +51,21 @@ export function summary(over: Partial<Summary> = {}): Summary {
     recent_enrollments: [device({ id: "d9", hostname: "PC-NUEVO-01" })],
     ...over,
   };
+}
+
+export function asset(over: Partial<Asset> = {}): Asset {
+  return {
+    id: "a1", device_id: null, origin: "manual", category_id: "c-mon", category: "Monitor", category_auto: false,
+    name: "Monitor sala", brand: "Dell", model: "P2422H", serial: "CN-0ABC", asset_tag: "EL-1", status: "en_almacen",
+    owner: null, department: "", location: "Planta 1", price: 150.5, purchase_date: "2026-01-15", warranty_until: "",
+    purchase_order: "", supplier: "", notes: "", deleted_at: null, deleted_reason: "", created_at: "2026-11-01T08:00:00Z",
+    updated_at: "2026-11-01T08:00:00Z", device: null, ...over,
+  };
+}
+
+/** Activo enlazado a un equipo con agente, con los datos del equipo. */
+export function agentAsset(over: Partial<Device> = {}, assetOver: Partial<Asset> = {}): Asset {
+  const d = device(over);
+  return asset({ id: "as-" + d.id, device_id: d.id, origin: "agent", name: d.hostname, category: "Portátil", category_id: "c-lap",
+    brand: d.manufacturer, model: d.model, serial: d.serial, status: "en_uso", device: d, ...assetOver });
 }

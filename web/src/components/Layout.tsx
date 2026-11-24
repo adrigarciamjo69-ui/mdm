@@ -10,7 +10,10 @@ import type { Role } from "../api/types";
 const links: { to: string; label: string; min: Role; end?: boolean }[] = [
   { to: "/", label: "Resumen", min: "readonly", end: true },
   { to: "/alertas", label: "Alertas", min: "readonly" },
-  { to: "/dispositivos", label: "Dispositivos", min: "readonly" },
+  { to: "/inventario", label: "Inventario", min: "readonly" },
+  { to: "/usuarios", label: "Usuarios", min: "readonly" },
+  { to: "/licencias", label: "Licencias", min: "readonly" },
+  { to: "/actas", label: "Doc. Entrega", min: "readonly" },
   { to: "/grupos", label: "Grupos", min: "readonly" },
   { to: "/politicas", label: "Políticas", min: "readonly" },
   { to: "/software", label: "Software", min: "readonly" },

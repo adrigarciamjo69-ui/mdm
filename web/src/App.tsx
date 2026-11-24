@@ -7,7 +7,10 @@ import Layout from "./components/Layout";
 import { NotFound, RequireAuth, RequireRole } from "./components/Guards";
 import Login from "./pages/Login";
 import Summary from "./pages/Summary";
-import Devices from "./pages/Devices";
+import Inventory, { DevicesRedirect } from "./pages/Inventory";
+import AssetDetail, { NewAsset } from "./pages/AssetDetail";
+import AssetImport from "./pages/AssetImport";
+import Trash from "./pages/Trash";
 import DeviceDetail from "./pages/DeviceDetail";
 import Groups from "./pages/Groups";
 import Enrollment from "./pages/Enrollment";
@@ -61,7 +64,12 @@ export function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route element={<RequireAuth><Layout /></RequireAuth>}>
         <Route index element={<Summary />} />
-        <Route path="dispositivos" element={<Devices />} />
+        <Route path="dispositivos" element={<DevicesRedirect />} />
+        <Route path="inventario" element={<Inventory />} />
+        <Route path="inventario/nuevo" element={<RequireRole min="operator"><NewAsset /></RequireRole>} />
+        <Route path="inventario/importar" element={<RequireRole min="operator"><AssetImport /></RequireRole>} />
+        <Route path="inventario/papelera" element={<Trash />} />
+        <Route path="inventario/:id" element={<AssetDetail />} />
         <Route path="dispositivos/:id" element={<DeviceDetail />} />
         <Route path="grupos" element={<Groups />} />
         <Route path="politicas" element={<Policies />} />

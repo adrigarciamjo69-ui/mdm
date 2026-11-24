@@ -321,3 +321,162 @@ export interface App {
   versions: AppVersion[];
   updated_at: string;
 }
+
+// --- Inventario ---
+
+export type AssetStatus = "en_uso" | "en_almacen" | "en_reparacion" | "baja";
+
+export interface PersonRef {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface Asset {
+  id: string;
+  device_id: string | null;
+  origin: "agent" | "manual";
+  category_id: string;
+  category: string;
+  category_auto: boolean;
+  name: string;
+  brand: string;
+  model: string;
+  serial: string;
+  asset_tag: string;
+  status: AssetStatus;
+  owner: PersonRef | null;
+  department: string;
+  location: string;
+  price: number | null;
+  purchase_date: string;
+  warranty_until: string;
+  purchase_order: string;
+  supplier: string;
+  notes: string;
+  deleted_at: string | null;
+  deleted_reason: string;
+  created_at: string;
+  updated_at: string;
+  device: Device | null;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  assets: number;
+}
+
+export interface AssetDocument {
+  id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  uploaded_by: string;
+  uploaded_at: string;
+}
+
+export interface DirectoryUser {
+  id: string;
+  entra_id: string;
+  display_name: string;
+  email: string;
+  upn: string;
+  department: string;
+  job_title: string;
+  employee_id: string;
+  phone: string;
+  office: string;
+  enabled: boolean;
+  deleted_at: string | null;
+  synced_at: string;
+  notes: string;
+  status: "active" | "disabled" | "deleted";
+  asset_count: number;
+}
+
+export interface DirectoryStatus {
+  configured: boolean;
+  last_sync_at: string | null;
+  last_success_at: string | null;
+  last_error: string;
+  last_count: number;
+  secret_expires: string;
+}
+
+export type LicenseType = "perpetua" | "suscripcion" | "volumen" | "oem" | "freeware" | "open_source" | "prueba";
+export type LicenseStatus = "activa" | "expirada" | "baja";
+
+export interface LicenseAssignment {
+  id: string;
+  asset: { id: string; name: string; serial: string } | null;
+  user: PersonRef | null;
+  notes: string;
+  assigned_at: string;
+}
+
+export interface License {
+  id: string;
+  name: string;
+  vendor: string;
+  version: string;
+  license_type: LicenseType;
+  seats: number;
+  has_key: boolean;
+  purchase_date: string;
+  expiry_date: string;
+  purchase_order: string;
+  price: number | null;
+  department: string;
+  status: LicenseStatus;
+  effective_status: LicenseStatus;
+  match_pattern: string;
+  notes: string;
+  assigned: number;
+  installed: number;
+  over: boolean;
+  created_at: string;
+  updated_at: string;
+  assignments?: LicenseAssignment[];
+}
+
+export interface DeliveryItem {
+  id?: string;
+  asset_id: string | null;
+  category: string;
+  brand: string;
+  model: string;
+  serial: string;
+  observations: string;
+}
+
+export interface Delivery {
+  id: string;
+  number: string;
+  type: "entrega" | "devolucion";
+  status: "borrador" | "confirmada" | "anulada";
+  user: { id: string; name: string; email: string; department: string; job_title: string; employee_id: string };
+  recipient_dni: string;
+  date: string;
+  responsible: string;
+  notes: string;
+  cancel_reason: string;
+  created_by: string;
+  created_at: string;
+  confirmed_at: string | null;
+  items: DeliveryItem[];
+}
+
+export interface DeliverySettings {
+  company: string;
+  nif: string;
+  address1: string;
+  address2: string;
+  phone: string;
+  web: string;
+  email: string;
+  city: string;
+  logo: string;
+  colors: { entrega: { primary: string; footer: string }; devolucion: { primary: string; footer: string } };
+  clauses: { entrega: string[]; devolucion: string[] };
+}

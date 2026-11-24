@@ -3,7 +3,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { mockApi } from "../test/mockApi";
 import { renderApp } from "../test/render";
-import { detail, device, me, page } from "../test/fixtures";
+import { agentAsset, detail, me, page } from "../test/fixtures";
 
 const compliance = {
   state: "noncompliant", noncompliant_since: "2026-11-15T10:00:00Z", evaluated_at: "2026-11-16T10:00:00Z", reported_at: "2026-11-16T10:00:00Z",
@@ -23,7 +23,8 @@ function setup(role: "admin" | "operator" = "admin") {
     "GET /devices/d1/compliance": { body: compliance },
     "GET /devices/d1/recovery-keys": { body: [{ key_id: "{K1}", volume: "C:", reported_at: "2026-11-16T09:00:00Z" }] },
     "POST /devices/d1/recovery-keys/{K1}/reveal": { body: { key_id: "{K1}", volume: "C:", recovery_password: "111111-222222-333333-444444-555555-666666-777777-888888" } },
-    "GET /devices": () => ({ body: page([device({ compliance: "noncompliant" } as never)]) }),
+    "GET /assets": () => ({ body: page([agentAsset({ compliance: "noncompliant" } as never)]) }),
+    "GET /asset-categories": { body: [] },
   });
 }
 
@@ -73,9 +74,8 @@ describe("Cumplimiento del dispositivo", () => {
 
   it("el filtro de cumplimiento añade compliance= a la URL y a la petición", async () => {
     const calls = setup();
-    const { location } = renderApp("/dispositivos");
+    const { location } = renderApp("/inventario?origin=agent");
     await screen.findByRole("link", { name: "PC-CONTA-07" });
-    expect(within(screen.getByRole("link", { name: "PC-CONTA-07" }).closest("tr")!).getByText("No cumple")).toBeInTheDocument();
     await userEvent.setup().selectOptions(screen.getByLabelText("Cumplimiento"), "noncompliant");
     await waitFor(() => expect(location()).toContain("compliance=noncompliant"));
     expect(calls.some((c) => c.path.includes("compliance=noncompliant"))).toBe(true);

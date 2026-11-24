@@ -24,7 +24,16 @@ export function mockApi(routes: Record<string, Handler>): Call[] {
       const path = decodeURIComponent(url.pathname).replace(/^\/api\/v1/, "");
       const headers: Record<string, string> = {};
       new Headers(init?.headers).forEach((v, k) => (headers[k.toLowerCase()] = v));
-      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      let body: unknown = undefined;
+      if (typeof init?.body === "string") {
+        try {
+          body = JSON.parse(init.body);
+        } catch {
+          body = init.body; // CSV u otro texto
+        }
+      } else if (init?.body) {
+        body = init.body; // FormData
+      }
       const call = { method, path: path + url.search, body, headers };
       calls.push(call);
       const handler = routes[`${method} ${path}`];

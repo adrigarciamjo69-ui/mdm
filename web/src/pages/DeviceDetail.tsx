@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, query } from "../api/client";
-import type { ActivityPoint, DeviceDetail as Detail, Group, Inventory, Page, SecurityState, Section, Software, Mobile } from "../api/types";
+import type { ActivityPoint, Asset, DeviceDetail as Detail, Group, Inventory, Page, SecurityState, Section, Software, Mobile } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import ActivityChart from "../components/ActivityChart";
 import ComplianceTab from "../components/ComplianceTab";
@@ -14,11 +14,13 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import Pagination from "../components/Pagination";
 import StatusBadge from "../components/StatusBadge";
 import Tabs from "../components/Tabs";
+import AssetPanel from "../components/AssetPanel";
 import { useDebounced } from "../lib/hooks";
 import { formatBytes, formatDate, formatDateTime, platformLabel, relativeTime } from "../lib/format";
 
 const TABS = [
   { id: "general", label: "General" },
+  { id: "asset", label: "Activo" },
   { id: "compliance", label: "Cumplimiento" },
   { id: "managed", label: "Software gestionado" },
   { id: "updates", label: "Actualizaciones" },
@@ -41,7 +43,8 @@ export default function DeviceDetail() {
   const { can } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState("general");
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState(params.get("tab") === "asset" ? "asset" : "general");
   const [dialog, setDialog] = useState<"revoke" | "delete" | null>(null);
 
   const device = useQuery({
@@ -55,7 +58,7 @@ export default function DeviceDetail() {
     return (
       <div className="notice">
         <p>{gone ? "Este dispositivo ya no existe." : device.error instanceof ApiError ? device.error.message : "No se ha podido cargar el dispositivo."}</p>
-        <Link to="/dispositivos">Volver a dispositivos</Link>
+        <Link to="/inventario?origin=agent">Volver al inventario</Link>
       </div>
     );
   }
@@ -74,13 +77,14 @@ export default function DeviceDetail() {
     queryClient.removeQueries({ queryKey: ["device", id] });
     void queryClient.invalidateQueries({ queryKey: ["devices"] });
     void queryClient.invalidateQueries({ queryKey: ["summary"] });
-    navigate("/dispositivos", { replace: true });
+    void queryClient.invalidateQueries({ queryKey: ["assets"] });
+    navigate("/inventario?origin=agent", { replace: true });
   }
 
   const makeModel = [d.manufacturer, d.model].filter(Boolean).join(" ");
   return (
     <>
-      <p className="small" style={{ marginBottom: "0.75rem" }}><Link to="/dispositivos">Dispositivos</Link></p>
+      <p className="small" style={{ marginBottom: "0.75rem" }}><Link to="/inventario">Inventario</Link></p>
 
       <header className="asset-tag">
         <div>
@@ -121,6 +125,7 @@ export default function DeviceDetail() {
       <Tabs tabs={d.platform === "android" ? TABS.filter((t) => !ANDROID_HIDDEN.has(t.id)) : TABS} active={tab} onChange={setTab} label="Secciones del dispositivo" />
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === "general" && <General d={d} />}
+        {tab === "asset" && <DeviceAsset id={id} />}
         {tab === "compliance" && <ComplianceTab d={d} />}
         {tab === "managed" && <ManagedSoftwareTab id={id} />}
         {tab === "updates" && <UpdatesTab id={id} />}
@@ -261,7 +266,6 @@ function AssignmentForm({ d }: { d: Detail }) {
   const queryClient = useQueryClient();
   const groups = useQuery({ queryKey: ["groups"], queryFn: () => api<Group[]>("GET", "/groups") });
   const [group, setGroup] = useState(d.group_id ?? "");
-  const [user, setUser] = useState(d.assigned_user);
   const [tags, setTags] = useState(d.tags.join(", "));
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -270,11 +274,10 @@ function AssignmentForm({ d }: { d: Detail }) {
   const changes = useMemo(() => {
     const c: Record<string, unknown> = {};
     if (group !== (d.group_id ?? "")) c.group_id = group || null;
-    if (user.trim() !== d.assigned_user) c.assigned_user = user.trim();
     const t = parseTags(tags);
     if (t.join(",") !== d.tags.join(",")) c.tags = t;
     return c;
-  }, [group, user, tags, d]);
+  }, [group, tags, d]);
   const dirty = Object.keys(changes).length > 0;
 
   useEffect(() => {
@@ -289,7 +292,6 @@ function AssignmentForm({ d }: { d: Detail }) {
       const updated = await api<Detail>("PATCH", `/devices/${d.id}`, changes);
       queryClient.setQueryData(["device", d.id], updated);
       void queryClient.invalidateQueries({ queryKey: ["devices"] });
-      setUser(updated.assigned_user);
       setTags(updated.tags.join(", "));
       setGroup(updated.group_id ?? "");
       setSaved(true);
@@ -310,10 +312,10 @@ function AssignmentForm({ d }: { d: Detail }) {
             {groups.data?.filter((g) => g.kind !== "dynamic").map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         </label>
-        <label className="field">
+        <div className="field">
           <span>Usuario asignado</span>
-          <input value={user} onChange={(e) => setUser(e.target.value)} maxLength={200} />
-        </label>
+          <span>{d.assigned_user || <span className="muted">—</span>} <span className="hint">se cambia en la pestaña Activo</span></span>
+        </div>
         <label className="field">
           <span>Etiquetas <span className="hint">separadas por comas</span></span>
           <input value={tags} onChange={(e) => setTags(e.target.value)} aria-label="Etiquetas" />
@@ -495,4 +497,11 @@ function Activity({ id }: { id: string }) {
       <ActivityChart points={a.data} />
     </div>
   );
+}
+
+function DeviceAsset({ id }: { id: string }) {
+  const q = useQuery({ queryKey: ["device-asset", id], queryFn: () => api<Asset>("GET", `/devices/${id}/asset`) });
+  if (q.error) return <p className="muted">{q.error instanceof ApiError ? q.error.message : "No se ha podido cargar el activo."}</p>;
+  if (!q.data) return <p className="muted">Cargando…</p>;
+  return <AssetPanel asset={q.data} />;
 }

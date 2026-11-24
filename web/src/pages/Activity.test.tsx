@@ -3,7 +3,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { mockApi } from "../test/mockApi";
 import { renderApp } from "../test/render";
-import { device, me, page } from "../test/fixtures";
+import { agentAsset, me, page } from "../test/fixtures";
 import { auditLabel } from "../lib/auditLabels";
 
 const batch = { id: "b1", type: "run_script", params: { script_name: "Limpiar", version: 2 }, target_description: "Grupo Ventas (2 equipos)",
@@ -54,12 +54,12 @@ describe("Actividad", () => {
 describe("Acciones desde el listado", () => {
   it("seleccionar equipos muestra la barra de acciones según el rol", async () => {
     mockApi({ "GET /auth/me": { body: me("operator") }, "GET /groups": { body: [] },
-      "GET /devices": { body: page([device(), device({ id: "d2", hostname: "PC-2" })]) } });
-    renderApp("/dispositivos");
+      "GET /assets": { body: page([agentAsset(), agentAsset({ id: "d2", hostname: "PC-2" })]) }, "GET /asset-categories": { body: [] } });
+    renderApp("/inventario");
     const user = userEvent.setup();
     await user.click(await screen.findByRole("checkbox", { name: "Seleccionar PC-CONTA-07" }));
     const bar = screen.getByRole("toolbar", { name: "Acciones" });
-    expect(within(bar).getByText("1 seleccionado")).toBeInTheDocument();
+    expect(within(screen.getByRole("toolbar", { name: "Selección" })).getByText("1 seleccionado")).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: "Reiniciar" })).toBeInTheDocument();
     expect(within(bar).queryByRole("button", { name: "Ejecutar script" })).toBeNull();
     expect(within(bar).queryByRole("button", { name: "Retirar" })).toBeNull();

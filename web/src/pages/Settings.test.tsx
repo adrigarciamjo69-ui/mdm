@@ -25,7 +25,7 @@ describe("Ajustes", () => {
   it("solo un administrador ve Ajustes en el menú", async () => {
     mockApi({ "GET /auth/me": { body: me("operator") }, "GET /summary": { body: {} } });
     renderApp("/");
-    await screen.findByRole("link", { name: "Dispositivos" });
+    await screen.findByRole("link", { name: "Inventario" });
     expect(screen.queryByRole("link", { name: "Ajustes" })).toBeNull();
   });
 
