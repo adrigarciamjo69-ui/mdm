@@ -11,6 +11,9 @@ import Inventory, { DevicesRedirect } from "./pages/Inventory";
 import AssetDetail, { NewAsset } from "./pages/AssetDetail";
 import AssetImport from "./pages/AssetImport";
 import Trash from "./pages/Trash";
+import Users, { UserDetailPage } from "./pages/Users";
+import Licenses, { LicenseDetail, NewLicense } from "./pages/Licenses";
+import InventorySettings from "./pages/InventorySettings";
 import DeviceDetail from "./pages/DeviceDetail";
 import Groups from "./pages/Groups";
 import Enrollment from "./pages/Enrollment";
@@ -70,6 +73,12 @@ export function AppRoutes() {
         <Route path="inventario/importar" element={<RequireRole min="operator"><AssetImport /></RequireRole>} />
         <Route path="inventario/papelera" element={<Trash />} />
         <Route path="inventario/:id" element={<AssetDetail />} />
+        <Route path="usuarios" element={<Users />} />
+        <Route path="usuarios/:id" element={<UserDetailPage />} />
+        <Route path="licencias" element={<Licenses />} />
+        <Route path="licencias/nueva" element={<RequireRole min="operator"><NewLicense /></RequireRole>} />
+        <Route path="licencias/:id" element={<LicenseDetail />} />
+        <Route path="ajustes/inventario" element={<RequireRole min="admin"><InventorySettings /></RequireRole>} />
         <Route path="dispositivos/:id" element={<DeviceDetail />} />
         <Route path="grupos" element={<Groups />} />
         <Route path="politicas" element={<Policies />} />

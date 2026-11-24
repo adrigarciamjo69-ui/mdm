@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api/client";
@@ -93,7 +94,9 @@ export default function Settings() {
 
   return (
     <>
-      <div className="page-head"><h1>Ajustes</h1></div>
+      <div className="page-head"><h1>Ajustes</h1>
+        <div className="page-actions"><Link className="btn" to="/ajustes/inventario">Ajustes del inventario (Entra ID, categorías, actas)</Link></div>
+      </div>
 
       <section className="panel" aria-labelledby="s-agent">
         <h2 id="s-agent">Agentes</h2>

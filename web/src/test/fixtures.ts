@@ -1,4 +1,4 @@
-import type { Asset, Device, DeviceDetail, Inventory, Page, Summary } from "../api/types";
+import type { Asset, Device, DirectoryUser, License, DeviceDetail, Inventory, Page, Summary } from "../api/types";
 
 export const me = (role: "admin" | "operator" | "readonly" = "admin") => ({ id: "a1", email: "ana@ejemplo.es", role, csrf_token: "csrf" });
 
@@ -68,4 +68,21 @@ export function agentAsset(over: Partial<Device> = {}, assetOver: Partial<Asset>
   const d = device(over);
   return asset({ id: "as-" + d.id, device_id: d.id, origin: "agent", name: d.hostname, category: "Portátil", category_id: "c-lap",
     brand: d.manufacturer, model: d.model, serial: d.serial, status: "en_uso", device: d, ...assetOver });
+}
+
+export function dirUser(over: Partial<DirectoryUser> = {}): DirectoryUser {
+  return {
+    id: "u1", entra_id: "e1", display_name: "Ana Pérez", email: "ana@electrans.es", upn: "ana@electrans.es", department: "TIC",
+    job_title: "Técnica", employee_id: "E-001", phone: "", office: "Barcelona", enabled: true, deleted_at: null,
+    synced_at: "2026-11-24T08:00:00Z", notes: "", status: "active", asset_count: 1, ...over,
+  };
+}
+
+export function license(over: Partial<License> = {}): License {
+  return {
+    id: "l1", name: "Microsoft Office 2021", vendor: "Microsoft", version: "2021", license_type: "volumen", seats: 10, has_key: true,
+    purchase_date: "2025-01-10", expiry_date: "", purchase_order: "PO-1", price: 1500, department: "TIC", status: "activa",
+    effective_status: "activa", match_pattern: "office", notes: "", assigned: 3, installed: 12, over: true,
+    created_at: "2025-01-10T08:00:00Z", updated_at: "2025-01-10T08:00:00Z", ...over,
+  };
 }
