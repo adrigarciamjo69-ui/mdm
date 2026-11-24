@@ -16,7 +16,7 @@ Criterios de éxito:
 - En **Software** se registra una licencia con sus puestos y se ve cuántos equipos la tienen instalada de verdad.
 - En **Doc. Entrega** se hace un acta de entrega a una persona con dos activos y se descarga el PDF; al confirmarla, los activos pasan a ser de esa persona.
 
-No-objetivos: migrar datos de la app de inventario; documentos adjuntos por activo; plano de planta; papelera; servicios y suscripciones; escritura en Entra (solo lectura); usuarios de Entra como cuentas de la consola (siguen siendo cuentas propias del MDM).
+No-objetivos: migrar datos de la app de inventario; plano de planta; servicios y suscripciones; escritura en Entra (solo lectura); usuarios de Entra como cuentas de la consola (siguen siendo cuentas propias del MDM).
 
 Anti-objetivos (sería un fracaso aunque funcione):
 
@@ -50,7 +50,7 @@ Migración nueva `0023_inventory.sql`. Todo con `id uuid`, `created_at`, `update
 | `category_id` | Obligatoria |
 | `name` | Nombre visible (para un equipo con agente, su hostname mientras el usuario no lo cambie) |
 | `brand`, `model` | Texto |
-| `serial` | Texto. Índice único parcial sobre `upper(trim(serial))` cuando no está vacío y no es basura (§4.3) |
+| `serial` | Texto. Índice único parcial sobre `upper(trim(serial))` cuando no está vacío, no es basura (§4.3) y el activo no está en la papelera |
 | `asset_tag` | Etiqueta interna opcional, única si no está vacía |
 | `status` | `en_uso`, `en_almacen`, `en_reparacion`, `baja` |
 | `owner_id` | `uuid NULL REFERENCES directory_users ON DELETE SET NULL` |
@@ -60,6 +60,7 @@ Migración nueva `0023_inventory.sql`. Todo con `id uuid`, `created_at`, `update
 | `purchase_date`, `warranty_until` | `date NULL` |
 | `purchase_order`, `supplier` | Texto |
 | `notes` | Texto |
+| `deleted_at`, `deleted_by` | Papelera (§3.7). `NULL` = activo vivo |
 
 Los campos técnicos (sistema, procesador, memoria, discos, red, software) **no** se copian al activo: se leen del dispositivo enlazado.
 
@@ -79,6 +80,24 @@ Los campos técnicos (sistema, procesador, memoria, discos, red, software) **no*
 
 `delivery_items`: `record_id`, `asset_id` (opcional), y una copia en texto de `category`, `brand`, `model`, `serial` tomada al añadirlo (el acta no cambia si luego se edita el activo); `observations`.
 
+### 3.6 Documentos de un activo
+
+`asset_documents`: `asset_id` (`ON DELETE CASCADE`), `sha256` (fichero en el almacén de ficheros existente, `MDM_FILES_DIR`), `filename` (nombre original), `content_type`, `size`, `uploaded_by`, `uploaded_at`.
+
+- Tipos permitidos, como en la app de inventario: PDF, Word (doc, docx), Excel (xls, xlsx), imágenes (JPEG, PNG, GIF, WebP), texto y ZIP. Se comprueba la extensión y los primeros bytes, no solo el tipo que manda el navegador. Hasta 20 MB por fichero.
+- Se usa el almacén de ficheros de los instaladores, con su control de espacio libre. La limpieza de ficheros sin uso (los que nada referencia a los 7 días) tiene que contar también `asset_documents`, para no borrar documentos.
+- Descarga con `Content-Disposition: attachment` y el nombre original; nunca se muestran en línea en la consola, para que un HTML o SVG subido no se ejecute.
+- Se ven en la ficha del activo, en una sección **Documentos** (facturas, garantías, albaranes, fotos). Subir y borrar: operador. Cada subida y borrado queda en la auditoría.
+
+### 3.7 Papelera
+
+- **Eliminar** un activo (administrador) lo manda a la papelera: `deleted_at` y `deleted_by`, con un motivo opcional que va a la auditoría. Desaparece del inventario, de los buscadores, de los informes y de las actas nuevas; las actas ya hechas conservan su copia en texto.
+- Al ir a la papelera, el activo pierde su dueño. Sus asignaciones de licencias y sus documentos se conservan, por si se restaura.
+- Pantalla **Papelera** (enlace desde Inventario): activos eliminados con quién y cuándo. **Restaurar** (operador) lo devuelve tal como estaba, salvo el dueño. Si mientras tanto otro activo ha tomado su número de serie, la restauración se rechaza con 409 y el motivo.
+- **Eliminar definitivamente** (administrador, con confirmación escribiendo el nombre): borra el activo, sus documentos y sus asignaciones. No se vacía sola.
+- Un activo en la papelera no cuenta para la unión por número de serie (§4.1): si el equipo vuelve a inscribirse, se crea un activo nuevo.
+- Solo hay papelera para activos. Licencias y actas en borrador se eliminan directamente, con confirmación.
+
 ## 4. Unión entre activos y equipos con agente
 
 ### 4.1 Al inscribirse un equipo
@@ -86,7 +105,7 @@ Los campos técnicos (sistema, procesador, memoria, discos, red, software) **no*
 En la misma transacción que `EnrollDevice`:
 
 1. Si ya hay un activo enlazado a ese `device_id` (reinscripción), no se hace nada más.
-2. Si el número de serie es válido (§4.3) y existe un activo **sin enlazar** con el mismo serie normalizado, se enlaza. Se conservan todos sus campos; si `brand` o `model` estaban vacíos, se rellenan con los del agente.
+2. Si el número de serie es válido (§4.3) y existe un activo **sin enlazar y fuera de la papelera** con el mismo serie normalizado, se enlaza. Se conservan todos sus campos; si `brand` o `model` estaban vacíos, se rellenan con los del agente.
 3. Si no, se crea un activo nuevo: `name` = hostname, `brand`/`model`/`serial` del agente, `status` = `en_uso`, y la categoría según §4.5.
 
 Los móviles Android inscritos por Google siguen el mismo camino en su sincronización.
@@ -185,7 +204,8 @@ La firma se hace a mano sobre el papel impreso. No hay firma electrónica.
   - Columnas: nombre, categoría, marca y modelo, número de serie, persona, estado, origen (icono de agente con su estado de conexión, o «manual»). Filtros: categoría, estado, origen (con agente, manual), persona, departamento, y los filtros actuales de equipos (grupo, plataforma, problemas) que solo afectan a los activos con agente. Exportar CSV.
   - Las acciones masivas actuales de equipos (reiniciar, scripts…) siguen disponibles al seleccionar filas con agente; las filas manuales no se pueden seleccionar para órdenes. Acciones masivas nuevas para cualquier activo: cambiar estado, categoría, persona o ubicación.
   - **Nuevo activo**: formulario con los campos de §3.2. **Importar CSV** con plantilla descargable (categoría, nombre, marca, modelo, serie, etiqueta, estado, correo de la persona, departamento, ubicación, precio, fecha de compra, garantía, pedido, proveedor, notas); vista previa con errores por fila antes de guardar.
-  - Ficha de un activo manual: sus datos, historial (auditoría filtrada), licencias y actas. Ficha de un activo con agente: la ficha actual del equipo con una pestaña nueva **Activo** (los datos de §3.2, licencias y actas).
+  - Ficha de un activo manual: sus datos, documentos, historial (auditoría filtrada), licencias y actas. Ficha de un activo con agente: la ficha actual del equipo con una pestaña nueva **Activo** (los datos de §3.2, documentos, licencias y actas).
+  - Enlace **Papelera** junto a los botones de la lista (§3.7).
 - **Usuarios** (§5.3), **Software** (§6), **Doc. Entrega** (§7): entradas nuevas del menú.
 - El **Resumen** añade un bloque opcional: activos por estado y licencias que caducan en 30 días.
 
@@ -194,10 +214,10 @@ La firma se hace a mano sobre el papel impreso. No hay firma electrónica.
 | Acción | Rol mínimo |
 |---|---|
 | Ver inventario, usuarios, licencias, actas; exportar | Solo lectura |
-| Crear y editar activos, licencias, asignaciones; importar CSV; crear y confirmar actas; sincronizar ahora | Operador |
-| Eliminar activos, licencias y actas en borrador; anular actas; enlazar y desenlazar a mano; mostrar claves; categorías; configurar Entra y los datos de las actas | Administrador |
+| Crear y editar activos, licencias, asignaciones; importar CSV; subir y borrar documentos; restaurar desde la papelera; crear y confirmar actas; sincronizar ahora | Operador |
+| Mandar activos a la papelera y eliminarlos definitivamente; eliminar licencias y actas en borrador; anular actas; enlazar y desenlazar a mano; mostrar claves; categorías; configurar Entra y los datos de las actas | Administrador |
 
-Eliminar un activo con agente enlazado no está permitido: primero se elimina el dispositivo o se desenlaza.
+Mandar a la papelera un activo con agente enlazado no está permitido: primero se elimina el dispositivo o se desenlaza.
 
 ## 10. Auditoría, informes y alertas
 
@@ -221,7 +241,8 @@ Eliminar un activo con agente enlazado no está permitido: primero se elimina el
 - En licencias se muestran por separado asignadas e instaladas.
 
 - Estados de activo `en_uso`, `en_almacen`, `en_reparacion`, `baja` (la app de inventario usaba activo, inactivo, reparación, baja; «en almacén» encaja mejor con las actas).
-- Sin papelera ni documentos adjuntos por activo.
+- Papelera solo para activos, sin vaciado automático; al ir a la papelera, el activo pierde su dueño.
+- Documentos: mismos tipos que la app de inventario, hasta 20 MB, siempre como descarga.
 - Confirmar un acta cambia la persona y el estado de sus activos.
 - Numeración `ENT-AAAA-NNNN` y `DEV-AAAA-NNNN`.
 - Datos y logotipo de la empresa y texto legal del PDF configurables en Ajustes; firma manuscrita sobre papel.
