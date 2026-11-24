@@ -17,7 +17,7 @@ func TestReportsAPI_ViewAndCSV(t *testing.T) {
 		Name    string   `json:"name"`
 		Columns []string `json:"columns"`
 	}](t, ro.do("GET", "/reports", nil))
-	if len(defs) != 9 {
+	if len(defs) != 11 {
 		t.Fatalf("%d informes", len(defs))
 	}
 	type res struct {
