@@ -129,7 +129,7 @@ export function AlertRuleEdit() {
             <input value={emails} onChange={(e) => setEmails(e.target.value)} /></label>
           {def.kind === "state" && <label className="check-field"><input type="checkbox" checked={notifyResolved} onChange={(e) => setNotifyResolved(e.target.checked)} />Avisar también cuando se resuelva</label>}
         </fieldset>
-        {type !== "console.login_failures" && (
+        {type !== "console.login_failures" && !def.global && (
           <fieldset className="params"><legend>Equipos</legend><AssignmentPicker value={assign} onChange={setAssign} /></fieldset>
         )}
         <label className="check-field"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />Activa</label>

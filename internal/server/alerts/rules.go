@@ -23,13 +23,24 @@ const (
 	TypeCommandFailed    = "command.failed"
 	TypeDeviceEnrolled   = "device.enrolled"
 	TypeLoginFailures    = "console.login_failures"
+
+	// Reglas globales: no van ligadas a un equipo.
+	TypeLicenseExpiring         = "license.expiring"
+	TypeDirectorySyncFailed     = "directory.sync_failed"
+	TypeDirectorySecretExpiring = "directory.secret_expiring"
 )
+
+// Global informa de si una regla abre una sola alerta sin equipo.
+func Global(t string) bool {
+	return t == TypeLicenseExpiring || t == TypeDirectorySyncFailed || t == TypeDirectorySecretExpiring
+}
 
 // Kind dice si una regla es de estado (se evalúa periódicamente y se resuelve
 // sola) o de suceso.
 func Kind(t string) string {
 	switch t {
-	case TypeDeviceOffline, TypeDiskLow, TypeNoncompliant, TypeAndroidIntegrity, TypeSecurityPending, TypeBitlockerMissing:
+	case TypeDeviceOffline, TypeDiskLow, TypeNoncompliant, TypeAndroidIntegrity, TypeSecurityPending, TypeBitlockerMissing,
+		TypeLicenseExpiring, TypeDirectorySyncFailed, TypeDirectorySecretExpiring:
 		return "state"
 	case TypeDeploymentFailed, TypeCommandFailed, TypeDeviceEnrolled, TypeLoginFailures:
 		return "event"
@@ -50,6 +61,7 @@ var intParams = map[string]intParam{
 	TypeDiskLow:         {"percent", 1, 50},
 	TypeSecurityPending: {"days", 1, 90},
 	TypeLoginFailures:   {"count", 3, 100},
+	TypeLicenseExpiring: {"days", 1, 180},
 }
 
 var optionalID = map[string]string{TypeNoncompliant: "policy_id", TypeDeploymentFailed: "deployment_id", TypeCommandFailed: "script_id"}

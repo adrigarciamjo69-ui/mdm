@@ -3,7 +3,7 @@ export const SEVERITY_LABEL: Record<string, string> = { critical: "Crítica", wa
 export const SEVERITY_CLASS: Record<string, string> = { critical: "status status-revoked", warning: "status status-offline", info: "status status-inactive" };
 export const STATE_LABEL: Record<string, string> = { open: "Abierta", acknowledged: "Reconocida", resolved: "Resuelta" };
 
-export interface RuleType { type: string; label: string; kind: "state" | "event"; param?: { name: string; label: string; min: number; max: number; def: number } }
+export interface RuleType { type: string; label: string; kind: "state" | "event"; global?: boolean; param?: { name: string; label: string; min: number; max: number; def: number } }
 
 export const RULE_TYPES: RuleType[] = [
   { type: "device.offline", label: "Equipo sin conexión", kind: "state", param: { name: "hours", label: "Horas sin conectar", min: 1, max: 720, def: 1 } },
@@ -12,6 +12,9 @@ export const RULE_TYPES: RuleType[] = [
   { type: "patches.security_pending", label: "Parches de seguridad pendientes", kind: "state", param: { name: "days", label: "Días pendientes", min: 1, max: 90, def: 14 } },
   { type: "bitlocker.key_missing", label: "Clave de BitLocker sin custodiar", kind: "state" },
   { type: "android.integrity", label: "Móvil con integridad dudosa", kind: "state" },
+  { type: "license.expiring", label: "Licencias que caducan pronto", kind: "state", global: true, param: { name: "days", label: "Días de antelación", min: 1, max: 180, def: 30 } },
+  { type: "directory.sync_failed", label: "Fallo al sincronizar usuarios de Entra ID", kind: "state", global: true },
+  { type: "directory.secret_expiring", label: "Secreto de Entra ID a punto de caducar (14 días)", kind: "state", global: true },
   { type: "deployment.failed", label: "Despliegue fallido", kind: "event" },
   { type: "command.failed", label: "Orden fallida", kind: "event" },
   { type: "device.enrolled", label: "Equipo inscrito", kind: "event" },

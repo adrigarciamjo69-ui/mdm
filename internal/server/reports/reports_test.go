@@ -75,7 +75,7 @@ func TestReports_Content(t *testing.T) {
 }
 
 func TestReports_Definitions(t *testing.T) {
-	want := []string{"hardware", "software_by_app", "software_by_device", "compliance", "patches_by_device", "patches_by_update", "deployments", "inactive", "android_patch_level"}
+	want := []string{"hardware", "software_by_app", "software_by_device", "compliance", "patches_by_device", "patches_by_update", "deployments", "inactive", "android_patch_level", "assets", "licenses"}
 	for _, n := range want {
 		if _, ok := Find(n); !ok {
 			t.Errorf("falta el informe %s", n)
@@ -132,5 +132,30 @@ func TestDefinitions_FiltersNeverNull(t *testing.T) {
 	b, _ := json.Marshal(All())
 	if strings.Contains(string(b), `"filters":null`) {
 		t.Fatal("algún informe devuelve filters: null")
+	}
+}
+
+func TestReports_AssetsAndLicenses(t *testing.T) {
+	s, _, _ := seed(t)
+	mon, _ := s.CategoryByName(ctx, "Monitor")
+	price := 150.5
+	if _, err := s.CreateAsset(ctx, store.AssetInput{CategoryID: mon.ID, Name: "Monitor sala", Brand: "Dell", Serial: "MON-1", Status: store.AssetInStock, Price: &price}); err != nil {
+		t.Fatal(err)
+	}
+	assets := run(t, s, "assets", Filters{})
+	if assets.Total != 3 { // los dos equipos con agente y el monitor
+		t.Fatalf("activos: %+v", assets.Rows)
+	}
+	if one := run(t, s, "assets", Filters{Q: "sala"}); one.Total != 1 || one.Rows[0][0] != "Monitor sala" || one.Rows[0][1] != "Monitor" ||
+		one.Rows[0][6] != "En almacén" || one.Rows[0][11] != "150.50" {
+		t.Fatalf("monitor: %+v", one.Rows)
+	}
+	exp := time.Date(2027, 3, 31, 0, 0, 0, 0, time.UTC)
+	if _, err := s.CreateLicense(ctx, store.LicenseInput{Name: "7-Zip Pro", LicenseType: "perpetua", Status: "activa", Seats: 1, MatchPattern: "7-zip", ExpiryDate: &exp}); err != nil {
+		t.Fatal(err)
+	}
+	lic := run(t, s, "licenses", Filters{})
+	if lic.Total != 1 || lic.Rows[0][0] != "7-Zip Pro" || lic.Rows[0][4] != "1" || lic.Rows[0][6] != "2" || lic.Rows[0][7] != "2027-03-31" {
+		t.Fatalf("licencias: %+v", lic.Rows)
 	}
 }

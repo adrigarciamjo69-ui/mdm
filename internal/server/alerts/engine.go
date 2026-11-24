@@ -127,6 +127,9 @@ func (e *Engine) EvaluateState(ctx context.Context) {
 }
 
 func (e *Engine) evaluateRule(ctx context.Context, r store.AlertRule, now time.Time) error {
+	if Global(r.Type) {
+		return e.evaluateGlobal(ctx, r, now)
+	}
 	scope, err := e.d.Store.DevicesInScope(ctx, r.Assignments)
 	if err != nil {
 		return err
@@ -388,4 +391,83 @@ func (e *Engine) HandleNotify(ctx context.Context, payload json.RawMessage) erro
 		return nil
 	}
 	return e.Notify(ctx, id, p.Kind)
+}
+
+// secretWarnDays es la antelación del aviso de caducidad del secreto de Entra.
+const secretWarnDays = 14
+
+// globalCondition dice si se cumple una regla global, con su título y detalle.
+func (e *Engine) globalCondition(ctx context.Context, r store.AlertRule, now time.Time) (bool, string, map[string]any, error) {
+	switch r.Type {
+	case TypeLicenseExpiring:
+		days := params(r).Days
+		ls, _, err := e.d.Store.ListLicenses(ctx, store.LicenseFilter{ExpiringDays: days, Today: now, All: true})
+		if err != nil || len(ls) == 0 {
+			return false, "", nil, err
+		}
+		names := make([]string, 0, len(ls))
+		for _, l := range ls {
+			names = append(names, fmt.Sprintf("%s (%s)", l.Name, l.ExpiryDate.Format("02/01/2006")))
+		}
+		noun := "licencias caducan"
+		if len(ls) == 1 {
+			noun = "licencia caduca"
+		}
+		return true, fmt.Sprintf("%d %s en los próximos %d días", len(ls), noun, days), map[string]any{"licenses": names}, nil
+	case TypeDirectorySyncFailed, TypeDirectorySecretExpiring:
+		c, err := e.d.Store.EntraConfig(ctx)
+		if err != nil || c.TenantID == "" {
+			return false, "", nil, err
+		}
+		if r.Type == TypeDirectorySyncFailed {
+			if c.LastError == "" {
+				return false, "", nil, nil
+			}
+			return true, "La sincronización de usuarios con Entra ID está fallando", map[string]any{"error": c.LastError}, nil
+		}
+		if c.SecretExpires == nil || c.SecretExpires.After(now.AddDate(0, 0, secretWarnDays)) {
+			return false, "", nil, nil
+		}
+		return true, "El secreto de la aplicación de Entra ID caduca el " + c.SecretExpires.Format("02/01/2006"),
+			map[string]any{"expires": c.SecretExpires.Format("2006-01-02")}, nil
+	}
+	return false, "", nil, nil
+}
+
+// evaluateGlobal abre una alerta sin equipo mientras se cumple la condición y
+// la resuelve cuando deja de cumplirse.
+func (e *Engine) evaluateGlobal(ctx context.Context, r store.AlertRule, now time.Time) error {
+	active, title, detail, err := e.globalCondition(ctx, r, now)
+	if err != nil {
+		return err
+	}
+	open, err := e.d.Store.UnresolvedAlerts(ctx, r.ID)
+	if err != nil {
+		return err
+	}
+	if active && len(open) == 0 {
+		details, _ := json.Marshal(detail)
+		rid := r.ID
+		if _, ok, err := e.d.Store.OpenAlert(ctx, store.Alert{RuleID: &rid, RuleName: r.Name, Severity: r.Severity,
+			Title: title, Details: details, OpenedAt: now}); err != nil {
+			return err
+		} else if ok {
+			e.scheduleNotify(ctx, r.ID, "opened", now)
+		}
+		return nil
+	}
+	if !active && len(open) > 0 {
+		resolved := false
+		for _, a := range open {
+			if ok, err := e.d.Store.ResolveAlert(ctx, a.ID, nil, now); err != nil {
+				return err
+			} else if ok {
+				resolved = true
+			}
+		}
+		if resolved && r.NotifyResolved {
+			e.scheduleNotify(ctx, r.ID, "resolved", now)
+		}
+	}
+	return nil
 }

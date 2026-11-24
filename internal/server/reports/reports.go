@@ -95,6 +95,32 @@ var defs = []Definition{
 		sql: `SELECT d.hostname, d.model, d.os_version, COALESCE(i.data->'mobile'->>'security_patch_level', ''), d.assigned_user
 			FROM devices d LEFT JOIN device_inventory i ON i.device_id = d.id WHERE ` + dev + ` AND d.platform = 'android'`,
 		order: `COALESCE(i.data->'mobile'->>'security_patch_level', '') NULLS FIRST, lower(d.hostname)`},
+	{Name: "assets", Title: "Inventario de activos", Description: "Todos los activos del inventario, con y sin agente, con su persona, estado y datos de compra.",
+		Columns: []string{"Nombre", "Categoría", "Marca", "Modelo", "Número de serie", "Etiqueta", "Estado", "Persona", "Departamento",
+			"Ubicación", "Origen", "Precio", "Fecha de compra", "Garantía hasta", "Pedido", "Proveedor"},
+		Filters: []string{"q"},
+		sql: `SELECT a.name, c.name, a.brand, a.model, a.serial, a.asset_tag,
+			CASE a.status WHEN 'en_uso' THEN 'En uso' WHEN 'en_almacen' THEN 'En almacén' WHEN 'en_reparacion' THEN 'En reparación' ELSE 'Baja' END,
+			COALESCE(u.display_name, ''), a.department, a.location, CASE WHEN a.device_id IS NULL THEN 'Manual' ELSE 'Agente' END,
+			COALESCE(to_char(a.price, 'FM9999999990.00'), ''), COALESCE(to_char(a.purchase_date, 'YYYY-MM-DD'), ''),
+			COALESCE(to_char(a.warranty_until, 'YYYY-MM-DD'), ''), a.purchase_order, a.supplier
+			FROM assets a JOIN asset_categories c ON c.id = a.category_id LEFT JOIN directory_users u ON u.id = a.owner_id
+			WHERE a.deleted_at IS NULL AND $1::uuid IS NULL IS NOT NULL AND $2::text IS NOT NULL AND $4::int IS NOT NULL
+			AND ($3 = '' OR a.name ILIKE '%' || $3 || '%' OR a.serial ILIKE '%' || $3 || '%' OR c.name ILIKE '%' || $3 || '%'
+			     OR COALESCE(u.display_name, '') ILIKE '%' || $3 || '%')`,
+		order: `lower(c.name), lower(a.name)`},
+	{Name: "licenses", Title: "Licencias", Description: "Cada licencia con sus puestos, asignaciones, instalaciones detectadas y caducidad.",
+		Columns: []string{"Licencia", "Fabricante", "Tipo", "Estado", "Puestos", "Asignadas", "Instaladas", "Caducidad", "Precio", "Departamento"},
+		Filters: []string{"q"},
+		sql: `SELECT l.name, l.vendor, l.license_type,
+			CASE WHEN l.status = 'activa' AND l.expiry_date < current_date THEN 'expirada' ELSE l.status END,
+			l.seats::text, (SELECT count(*) FROM license_assignments la WHERE la.license_id = l.id)::text,
+			(SELECT count(DISTINCT s.device_id) FROM device_software s JOIN devices dv ON dv.id = s.device_id
+			 WHERE l.match_pattern <> '' AND dv.revoked_at IS NULL AND s.name ILIKE '%' || l.match_pattern || '%')::text,
+			COALESCE(to_char(l.expiry_date, 'YYYY-MM-DD'), ''), COALESCE(to_char(l.price, 'FM9999999990.00'), ''), l.department
+			FROM licenses l WHERE $1::uuid IS NULL IS NOT NULL AND $2::text IS NOT NULL AND $4::int IS NOT NULL
+			AND ($3 = '' OR l.name ILIKE '%' || $3 || '%' OR l.vendor ILIKE '%' || $3 || '%')`,
+		order: `lower(l.name)`},
 }
 
 // All devuelve las definiciones (con Filters nunca nulo: la consola lo recorre).
