@@ -81,6 +81,37 @@ const (
 	AutomationCreated     = "automation.created"
 	AutomationUpdated     = "automation.updated"
 	AutomationDeleted     = "automation.deleted"
+
+	AssetCreated          = "asset.created"
+	AssetUpdated          = "asset.updated"
+	AssetTrashed          = "asset.trashed"
+	AssetRestored         = "asset.restored"
+	AssetPurged           = "asset.purged"
+	AssetLinked           = "asset.linked"
+	AssetUnlinked         = "asset.unlinked"
+	AssetsBulkUpdated     = "assets.bulk_updated"
+	AssetsImported        = "assets.imported"
+	AssetsExported        = "assets.exported"
+	AssetDocumentAdded    = "asset_document.added"
+	AssetDocumentDeleted  = "asset_document.deleted"
+	CategoryCreated       = "asset_category.created"
+	CategoryUpdated       = "asset_category.updated"
+	CategoryDeleted       = "asset_category.deleted"
+	DirectoryConfigured   = "directory.configured"
+	DirectorySynced       = "directory.synced"
+	DirectoryUserUpdated  = "directory_user.updated"
+	LicenseCreated        = "license.created"
+	LicenseUpdated        = "license.updated"
+	LicenseDeleted        = "license.deleted"
+	LicenseKeyViewed      = "license.key_viewed"
+	LicenseAssigned       = "license.assigned"
+	LicenseUnassigned     = "license.unassigned"
+	DeliveryCreated       = "delivery.created"
+	DeliveryUpdated       = "delivery.updated"
+	DeliveryDeleted       = "delivery.deleted"
+	DeliveryConfirmed     = "delivery.confirmed"
+	DeliveryCancelled     = "delivery.cancelled"
+	DeliverySettingsSaved = "delivery.settings_updated"
 )
 
 // Actions lista todas las acciones, para validar filtros y poblar la consola.
@@ -95,7 +126,13 @@ var Actions = []string{LoginOK, LoginFailed, Logout, TOTPEnrolled, AdminCreated,
 	EmailConfigured, ChannelCreated, ChannelUpdated, ChannelDeleted,
 	AlertRuleCreated, AlertRuleUpdated, AlertRuleDeleted, AlertAcknowledged, AlertResolved,
 	ReportExported, ReportScheduleCreated, ReportScheduleUpdated, ReportScheduleDeleted,
-	AutomationCreated, AutomationUpdated, AutomationDeleted}
+	AutomationCreated, AutomationUpdated, AutomationDeleted,
+	AssetCreated, AssetUpdated, AssetTrashed, AssetRestored, AssetPurged, AssetLinked, AssetUnlinked,
+	AssetsBulkUpdated, AssetsImported, AssetsExported, AssetDocumentAdded, AssetDocumentDeleted,
+	CategoryCreated, CategoryUpdated, CategoryDeleted, DirectoryConfigured, DirectorySynced, DirectoryUserUpdated,
+	LicenseCreated, LicenseUpdated, LicenseDeleted, LicenseKeyViewed, LicenseAssigned, LicenseUnassigned,
+	DeliveryCreated, DeliveryUpdated, DeliveryDeleted, DeliveryConfirmed, DeliveryCancelled, DeliverySettingsSaved,
+}
 
 type Entry struct {
 	// Actor es el administrador que actúa; nil cuando actúa el sistema o un agente.

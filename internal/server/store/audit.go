@@ -26,6 +26,8 @@ type AuditFilter struct {
 	ActorEmail string
 	Action     string
 	From, To   *time.Time
+	TargetType string
+	TargetID   string
 	Page       int
 	PerPage    int
 }
@@ -44,6 +46,12 @@ func (s *Store) ListAudit(ctx context.Context, f AuditFilter) ([]AuditEntry, int
 	}
 	if f.Action != "" {
 		add("action = $%d", f.Action)
+	}
+	if f.TargetType != "" {
+		add("target_type = $%d", f.TargetType)
+	}
+	if f.TargetID != "" {
+		add("target_id = $%d", f.TargetID)
 	}
 	if f.From != nil {
 		add("at >= $%d", *f.From)

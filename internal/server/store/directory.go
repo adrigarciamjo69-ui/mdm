@@ -105,3 +105,98 @@ func (s *Store) ApplyDirectorySync(ctx context.Context, users []DirectoryUser, a
 	}
 	return tx.Commit(ctx)
 }
+
+type DirectoryFilter struct {
+	Q          string
+	Department string
+	// Status: active, disabled, deleted o leavers (deshabilitados o
+	// eliminados en Entra que aún tienen activos).
+	Status  string
+	Page    int
+	PerPage int
+}
+
+type DirectoryUserRow struct {
+	DirectoryUser
+	AssetCount int
+}
+
+// ListDirectoryUsers devuelve una página de personas con su número de activos.
+func (s *Store) ListDirectoryUsers(ctx context.Context, f DirectoryFilter) ([]DirectoryUserRow, int, error) {
+	var conds []string
+	var args []any
+	arg := func(v any) string {
+		args = append(args, v)
+		return fmt.Sprintf("$%d", len(args))
+	}
+	if f.Q != "" {
+		p := arg("%" + escapeLike(f.Q) + "%")
+		conds = append(conds, fmt.Sprintf("(u.display_name ILIKE %[1]s OR u.email ILIKE %[1]s OR u.upn ILIKE %[1]s OR u.employee_id ILIKE %[1]s)", p))
+	}
+	if f.Department != "" {
+		conds = append(conds, "u.department = "+arg(f.Department))
+	}
+	const count = `(SELECT count(*) FROM assets a WHERE a.owner_id = u.id AND a.deleted_at IS NULL)`
+	switch f.Status {
+	case "active":
+		conds = append(conds, "u.deleted_at IS NULL AND u.enabled")
+	case "disabled":
+		conds = append(conds, "u.deleted_at IS NULL AND NOT u.enabled")
+	case "deleted":
+		conds = append(conds, "u.deleted_at IS NOT NULL")
+	case "leavers":
+		conds = append(conds, "(u.deleted_at IS NOT NULL OR NOT u.enabled) AND "+count+" > 0")
+	}
+	where := ""
+	if len(conds) > 0 {
+		where = " WHERE " + strings.Join(conds, " AND ")
+	}
+	var total int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM directory_users u`+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	page, perPage := normalizePage(f.Page, f.PerPage)
+	args = append(args, perPage, (page-1)*perPage)
+	rows, err := s.pool.Query(ctx, `SELECT `+dirCols+`, `+count+` FROM directory_users u`+where+
+		fmt.Sprintf(" ORDER BY lower(u.display_name), u.id LIMIT $%d OFFSET $%d", len(args)-1, len(args)), args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	out := []DirectoryUserRow{}
+	for rows.Next() {
+		var r DirectoryUserRow
+		if err := rows.Scan(append(dirDest(&r.DirectoryUser), &r.AssetCount)...); err != nil {
+			return nil, 0, err
+		}
+		out = append(out, r)
+	}
+	return out, total, rows.Err()
+}
+
+// DirectoryDepartments devuelve los departamentos distintos, para los filtros.
+func (s *Store) DirectoryDepartments(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT department FROM directory_users WHERE department <> '' AND deleted_at IS NULL ORDER BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// SetDirectoryUserNotes guarda las notas propias de una persona.
+func (s *Store) SetDirectoryUserNotes(ctx context.Context, id uuid.UUID, notes string) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE directory_users SET notes = $2 WHERE id = $1`, id, notes)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
+}

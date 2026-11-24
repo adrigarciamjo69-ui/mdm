@@ -216,8 +216,3 @@ func (s *Store) SetCurrentVersion(ctx context.Context, appID, versionID uuid.UUI
 		return err
 	})
 }
-
-func init() {
-	unreferencedFilesQuery = `SELECT sha256 FROM files f WHERE uploaded_at < $1
-		AND NOT EXISTS (SELECT 1 FROM app_versions v WHERE v.file_sha256 = f.sha256)`
-}

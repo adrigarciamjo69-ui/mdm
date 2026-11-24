@@ -148,7 +148,9 @@ func assetByID(ctx context.Context, q querier, id uuid.UUID) (Asset, error) {
 	return a, err
 }
 
-func (s *Store) AssetByID(ctx context.Context, id uuid.UUID) (Asset, error) { return assetByID(ctx, s.pool, id) }
+func (s *Store) AssetByID(ctx context.Context, id uuid.UUID) (Asset, error) {
+	return assetByID(ctx, s.pool, id)
+}
 
 // AssetByDevice devuelve el activo enlazado a un equipo.
 func (s *Store) AssetByDevice(ctx context.Context, deviceID uuid.UUID) (Asset, error) {
