@@ -152,6 +152,8 @@ type Hardware struct {
 	CPUCores     int    `json:"cpu_cores"`
 	CPUThreads   int    `json:"cpu_threads"`
 	MemoryBytes  uint64 `json:"memory_bytes"`
+	// Chassis es el tipo de equipo según SMBIOS: laptop, desktop, server o unknown.
+	Chassis string `json:"chassis,omitempty"`
 }
 
 type Disk struct {

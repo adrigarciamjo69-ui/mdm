@@ -77,6 +77,17 @@ func RegisterJobs(r *jobs.Runner, s *store.Store, fs *files.Store, now func() ti
 	})
 	r.Every("cleanup", time.Hour)
 
+	// assets.backfill: cada equipo tiene su activo en el inventario (al
+	// arrancar y cada hora, por si alguno quedó sin él).
+	r.Handle("assets.backfill", func(ctx context.Context, _ json.RawMessage) error {
+		n, err := s.EnsureAllDeviceAssets(ctx)
+		if n > 0 {
+			slog.Info("inventario: activos creados para equipos", "n", n)
+		}
+		return err
+	})
+	r.Every("assets.backfill", time.Hour)
+
 	// groups.recompute: sin carga, todos los grupos (cada hora); con device_id,
 	// los grupos de un equipo; con group_id, los miembros de un grupo.
 	r.Handle("groups.recompute", func(ctx context.Context, payload json.RawMessage) error {

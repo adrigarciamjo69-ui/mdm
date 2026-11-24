@@ -30,7 +30,12 @@ const androidCredential = "android"
 func (s *Store) UpsertAndroidDevice(ctx context.Context, d AndroidDevice) (uuid.UUID, bool, error) {
 	var id uuid.UUID
 	var created bool
-	err := s.pool.QueryRow(ctx,
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return id, false, err
+	}
+	defer tx.Rollback(ctx)
+	err = tx.QueryRow(ctx,
 		`INSERT INTO devices (hardware_id, amapi_name, hostname, platform, os_name, os_version, serial, manufacturer, model,
 		                      credential_hash, group_id, enrolled_at, last_seen_at)
 		 VALUES ($1, $1, $2, 'android', 'Android', $3, $4, $5, $6, $7, $8, $9, $10)
@@ -40,7 +45,13 @@ func (s *Store) UpsertAndroidDevice(ctx context.Context, d AndroidDevice) (uuid.
 		 RETURNING id, (xmax = 0)`,
 		d.AmapiName, d.Hostname, d.OSVersion, d.Serial, d.Manufacturer, d.Model, androidCredential, d.GroupID, d.EnrolledAt, d.LastSeenAt).
 		Scan(&id, &created)
-	return id, created, err
+	if err != nil {
+		return id, false, err
+	}
+	if _, err := ensureDeviceAsset(ctx, tx, id); err != nil {
+		return id, false, err
+	}
+	return id, created, tx.Commit(ctx)
 }
 
 func (s *Store) DeviceIDByAmapiName(ctx context.Context, name string) (uuid.UUID, error) {

@@ -160,7 +160,17 @@ func (c *linuxCollector) hardware() (protocol.Hardware, error) {
 		Manufacturer: c.dmi("sys_vendor"), Model: c.dmi("product_name"), Serial: c.dmi("product_serial"),
 		BIOSVendor: c.dmi("bios_vendor"), BIOSVersion: c.dmi("bios_version"), BIOSDate: c.dmi("bios_date"),
 		CPUModel: model, CPUCores: cores, CPUThreads: threads, MemoryBytes: parseMemTotal(meminfo),
+		Chassis: chassisFromDMI(c.dmi("chassis_type")),
 	}, nil
+}
+
+// chassisFromDMI traduce el código de /sys/class/dmi/id/chassis_type.
+func chassisFromDMI(raw string) string {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return protocol.ChassisUnknown
+	}
+	return protocol.ChassisFromSMBIOS([]int{n})
 }
 
 // disks devuelve los volúmenes montados. encryptionKnown es falso si no se

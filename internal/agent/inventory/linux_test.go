@@ -58,7 +58,8 @@ func TestLinuxCollect_FullTree(t *testing.T) {
 	}
 	h := inv.Hardware
 	if h.Manufacturer != "Dell Inc." || h.Model != "PowerEdge R640" || h.Serial != "ABC1234" || h.BIOSVersion != "2.19.1" ||
-		h.CPUCores != 8 || h.CPUThreads != 16 || h.MemoryBytes != 16699576320 || !strings.Contains(h.CPUModel, "Xeon") {
+		h.CPUCores != 8 || h.CPUThreads != 16 || h.MemoryBytes != 16699576320 || !strings.Contains(h.CPUModel, "Xeon") ||
+		h.Chassis != protocol.ChassisServer {
 		t.Errorf("hardware: %+v", h)
 	}
 	if len(inv.Disks) != 4 {

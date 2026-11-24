@@ -144,6 +144,11 @@ func (s *Store) SaveInventory(ctx context.Context, id uuid.UUID, inv protocol.In
 	if err != nil {
 		return err
 	}
+	if !missing[protocol.SectionHardware] {
+		if err := applyChassis(ctx, tx, id, inv.Hardware.Chassis); err != nil {
+			return fmt.Errorf("categoría del activo: %w", err)
+		}
+	}
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO device_inventory (device_id, collected_at, data) VALUES ($1, $2, $3)
 		 ON CONFLICT (device_id) DO UPDATE SET collected_at = EXCLUDED.collected_at, data = EXCLUDED.data`,

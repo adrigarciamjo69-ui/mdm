@@ -96,6 +96,9 @@ func (s *Store) EnrollDevice(ctx context.Context, p EnrollParams) (EnrollResult,
 	if err != nil {
 		return EnrollResult{}, fmt.Errorf("guardar dispositivo: %w", err)
 	}
+	if _, err := ensureDeviceAsset(ctx, tx, res.DeviceID); err != nil {
+		return EnrollResult{}, fmt.Errorf("activo del equipo: %w", err)
+	}
 	typ := EventDeviceEnrolled
 	if res.Reenrolled {
 		typ = EventDeviceReenrolled

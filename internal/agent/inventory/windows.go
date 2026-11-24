@@ -39,6 +39,10 @@ type win32BIOS struct {
 	ReleaseDate       *time.Time
 }
 
+type win32SystemEnclosure struct {
+	ChassisTypes []uint16
+}
+
 type win32ComputerSystemProduct struct {
 	UUID string
 }
@@ -226,6 +230,15 @@ func (c *windowsCollector) hardware() (protocol.Hardware, bool) {
 		if bios[0].ReleaseDate != nil {
 			h.BIOSDate = bios[0].ReleaseDate.Format("2006-01-02")
 		}
+	}
+	var encl []win32SystemEnclosure
+	h.Chassis = protocol.ChassisUnknown
+	if err := c.query("SELECT ChassisTypes FROM Win32_SystemEnclosure", &encl); err == nil && len(encl) > 0 {
+		codes := make([]int, 0, len(encl[0].ChassisTypes))
+		for _, t := range encl[0].ChassisTypes {
+			codes = append(codes, int(t))
+		}
+		h.Chassis = protocol.ChassisFromSMBIOS(codes)
 	}
 	return h, true
 }
