@@ -12,6 +12,7 @@ import (
 	"mdm/internal/server/androidsvc"
 	"mdm/internal/server/automations"
 	"mdm/internal/server/compliance"
+	"mdm/internal/server/directory"
 	"mdm/internal/server/files"
 	"mdm/internal/server/jobs"
 	"mdm/internal/server/metrics"
@@ -141,6 +142,13 @@ func RegisterAndroidJobs(r *jobs.Runner, svc *androidsvc.Service) {
 	r.Every("android.sync", 15*time.Minute)
 	r.Handle("android.commands", func(ctx context.Context, _ json.RawMessage) error { return svc.ProcessCommands(ctx) })
 	r.Every("android.commands", time.Minute)
+}
+
+// RegisterDirectoryJobs registra la sincronización de usuarios con Entra ID
+// (cada hora). Sin configuración no hace nada.
+func RegisterDirectoryJobs(r *jobs.Runner, sy *directory.Syncer) {
+	r.Handle("directory.sync", func(ctx context.Context, _ json.RawMessage) error { return sy.Run(ctx) })
+	r.Every("directory.sync", time.Hour)
 }
 
 // EventHandler recibe cada suceso interno.

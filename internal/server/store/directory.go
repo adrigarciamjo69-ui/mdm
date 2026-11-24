@@ -200,3 +200,47 @@ func (s *Store) SetDirectoryUserNotes(ctx context.Context, id uuid.UUID, notes s
 	}
 	return err
 }
+
+// EntraConfig es la configuración y el estado de la conexión con Entra ID.
+type EntraConfig struct {
+	TenantID      string
+	ClientID      string
+	SealedSecret  string
+	SecretExpires *time.Time
+	LastSyncAt    *time.Time
+	LastSuccessAt *time.Time
+	LastError     string
+	LastCount     int
+}
+
+func (s *Store) EntraConfig(ctx context.Context) (EntraConfig, error) {
+	var c EntraConfig
+	err := s.pool.QueryRow(ctx, `SELECT tenant_id, client_id, sealed_secret, secret_expires, last_sync_at, last_success_at,
+	        last_error, last_count FROM entra_config`).
+		Scan(&c.TenantID, &c.ClientID, &c.SealedSecret, &c.SecretExpires, &c.LastSyncAt, &c.LastSuccessAt, &c.LastError, &c.LastCount)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return EntraConfig{}, nil
+	}
+	return c, err
+}
+
+// SaveEntraConfig guarda las credenciales (no toca el estado de la última
+// sincronización).
+func (s *Store) SaveEntraConfig(ctx context.Context, c EntraConfig) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO entra_config (id, tenant_id, client_id, sealed_secret, secret_expires)
+	    VALUES (true, $1, $2, $3, $4)
+	    ON CONFLICT (id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, client_id = EXCLUDED.client_id,
+	        sealed_secret = EXCLUDED.sealed_secret, secret_expires = EXCLUDED.secret_expires`,
+		c.TenantID, c.ClientID, c.SealedSecret, c.SecretExpires)
+	return err
+}
+
+// RecordDirectorySync guarda el resultado de un intento de sincronización.
+func (s *Store) RecordDirectorySync(ctx context.Context, errMsg string, count int, at time.Time) error {
+	if errMsg == "" {
+		_, err := s.pool.Exec(ctx, `UPDATE entra_config SET last_sync_at = $1, last_success_at = $1, last_error = '', last_count = $2`, at, count)
+		return err
+	}
+	_, err := s.pool.Exec(ctx, `UPDATE entra_config SET last_sync_at = $1, last_error = $2`, at, errMsg)
+	return err
+}

@@ -176,6 +176,16 @@ func (a *api) routes(r chi.Router) {
 	r.With(admin).Patch("/asset-categories/{id}", a.renameCategory)
 	r.With(admin).Delete("/asset-categories/{id}", a.deleteCategory)
 
+	r.With(read).Get("/directory/users", a.listDirectoryUsers)
+	r.With(read).Get("/directory/departments", a.directoryDepartments)
+	r.With(read).Get("/directory/status", a.directoryStatus)
+	r.With(read).Get("/directory/users/{id}", a.getDirectoryUser)
+	r.With(operate).Patch("/directory/users/{id}", a.patchDirectoryUser)
+	r.With(operate).Post("/directory/sync", a.syncDirectory)
+	r.With(admin).Get("/integrations/entra", a.getEntraConfig)
+	r.With(admin).Put("/integrations/entra", a.putEntraConfig)
+	r.With(admin).Post("/integrations/entra/test", a.testEntraConfig)
+
 	r.With(read).Get("/settings", a.getSettings)
 	r.With(admin).Put("/settings", a.putSettings)
 }

@@ -58,6 +58,8 @@ func NewHandler(cfg Config, s *store.Store, static fs.FS, now func() time.Time) 
 		Files:            fileStore,
 		AndroidAPIBase:   cfg.AndroidAPIBase,
 		Version:          cfg.Version,
+		AuthBase:         cfg.EntraAuthBase,
+		GraphBase:        cfg.GraphBase,
 	})
 	agent := agentapi.New(agentapi.Deps{
 		Store: s, Audit: auditLog, Now: now, TrustProxy: cfg.TrustProxy,

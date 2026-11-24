@@ -25,6 +25,7 @@ import (
 	"mdm/internal/server/app"
 	"mdm/internal/server/auth"
 	"mdm/internal/server/automations"
+	"mdm/internal/server/directory"
 	"mdm/internal/server/files"
 	"mdm/internal/server/jobs"
 	"mdm/internal/server/metrics"
@@ -116,6 +117,8 @@ func serve() error {
 	}
 	app.RegisterAndroidJobs(runner, androidsvc.New(androidsvc.Deps{Store: s, Secrets: box, APIBase: cfg.AndroidAPIBase, Now: time.Now,
 		CheckinIntervalS: protocol.DefaultCheckinIntervalS, Log: slog.Default()}))
+	app.RegisterDirectoryJobs(runner, directory.NewSyncer(directory.Deps{Store: s, Secrets: box, AuthBase: cfg.EntraAuthBase,
+		GraphBase: cfg.GraphBase, Now: time.Now}))
 	alertEngine := alerts.New(alerts.Deps{Store: s, Now: time.Now, PublicURL: cfg.PublicURL, Log: slog.Default()})
 	deliverer := &notify.Deliverer{Store: s, Secrets: box, Version: version, Now: time.Now}
 	location := func() *time.Location {

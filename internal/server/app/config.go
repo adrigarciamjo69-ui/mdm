@@ -19,6 +19,9 @@ type Config struct {
 	FilesDir string
 	// AndroidAPIBase sustituye la dirección de la Android Management API (solo pruebas).
 	AndroidAPIBase string
+	// EntraAuthBase y GraphBase sustituyen las direcciones de Microsoft (solo pruebas).
+	EntraAuthBase string
+	GraphBase     string
 	// TrustProxy indica que hay un proxy inverso delante: la IP del cliente se
 	// toma del último valor de X-Forwarded-For.
 	TrustProxy bool
@@ -37,6 +40,8 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 		DownloadsDir:   getenv("MDM_DOWNLOADS_DIR"),
 		FilesDir:       getenv("MDM_FILES_DIR"),
 		AndroidAPIBase: getenv("MDM_ANDROID_API_BASE"),
+		EntraAuthBase:  getenv("MDM_ENTRA_AUTH_BASE"),
+		GraphBase:      getenv("MDM_GRAPH_BASE"),
 		TrustProxy:     strings.EqualFold(getenv("MDM_TRUSTED_PROXY"), "true"),
 		SecretKey:      getenv("MDM_SECRET_KEY"),
 	}

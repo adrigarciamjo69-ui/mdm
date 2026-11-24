@@ -41,6 +41,9 @@ type Deps struct {
 	AndroidAPIBase string
 	// Version del servidor (para el User-Agent de los webhooks).
 	Version string
+	// AuthBase y GraphBase sustituyen las direcciones de Microsoft (solo pruebas).
+	AuthBase  string
+	GraphBase string
 }
 
 type api struct {
