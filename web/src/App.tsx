@@ -14,6 +14,7 @@ import Trash from "./pages/Trash";
 import Users, { UserDetailPage } from "./pages/Users";
 import Licenses, { LicenseDetail, NewLicense } from "./pages/Licenses";
 import InventorySettings from "./pages/InventorySettings";
+import Deliveries, { DeliveryEdit } from "./pages/Deliveries";
 import DeviceDetail from "./pages/DeviceDetail";
 import Groups from "./pages/Groups";
 import Enrollment from "./pages/Enrollment";
@@ -78,6 +79,9 @@ export function AppRoutes() {
         <Route path="licencias" element={<Licenses />} />
         <Route path="licencias/nueva" element={<RequireRole min="operator"><NewLicense /></RequireRole>} />
         <Route path="licencias/:id" element={<LicenseDetail />} />
+        <Route path="actas" element={<Deliveries />} />
+        <Route path="actas/nueva" element={<RequireRole min="operator"><DeliveryEdit /></RequireRole>} />
+        <Route path="actas/:id" element={<DeliveryEdit key="edit" />} />
         <Route path="ajustes/inventario" element={<RequireRole min="admin"><InventorySettings /></RequireRole>} />
         <Route path="dispositivos/:id" element={<DeviceDetail />} />
         <Route path="grupos" element={<Groups />} />
