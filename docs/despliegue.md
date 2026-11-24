@@ -10,6 +10,8 @@ Para 100 a 1.000 equipos basta una máquina Linux con 2 vCPU, 4 GB de RAM y 20 G
 
 Si el servidor solo debe ser accesible desde la red interna, Caddy puede usar un certificado de la autoridad interna de la empresa; en ese caso sustituye el bloque del `Caddyfile` por uno con la directiva `tls` apuntando al certificado y su clave, y distribuye la autoridad a los equipos (ver la guía del agente).
 
+Para la sincronización de usuarios con Entra ID (ver [inventario](inventario.md)), el servidor necesita salida HTTPS a `login.microsoftonline.com` y `graph.microsoft.com`.
+
 ## Puesta en marcha
 
 Desde la carpeta `deploy/` del repositorio:

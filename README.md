@@ -11,6 +11,8 @@ Plataforma propia y autoalojada de gestión de dispositivos para Windows y Linux
 
 - **Fase 6, alertas, informes y automatizaciones:** alertas con avisos por correo y webhook firmado (agrupados), informes predefinidos con exportación CSV y envío programado, automatizaciones con simulación y salvaguardas, y un resumen personalizable con tendencias de 90 días. Ver [docs/alertas.md](docs/alertas.md) y [docs/webhooks.md](docs/webhooks.md).
 
+- **Inventario:** un solo inventario con los equipos con agente y los activos dados de alta a mano (unidos por número de serie), personas sincronizadas desde Entra ID, licencias con detección de instalaciones, documentos, papelera y actas de entrega y devolución en PDF. Ver [docs/inventario.md](docs/inventario.md).
+
 Queda fuera, por decisión del diseño: los iPhone y los móviles personales (perfil de trabajo), y el control remoto en directo.
 
 ## Piezas
