@@ -186,6 +186,17 @@ func (a *api) routes(r chi.Router) {
 	r.With(admin).Put("/integrations/entra", a.putEntraConfig)
 	r.With(admin).Post("/integrations/entra/test", a.testEntraConfig)
 
+	r.With(read).Get("/licenses", a.listLicenses)
+	r.With(operate).Post("/licenses", a.createLicense)
+	r.With(read).Get("/licenses/{id}", a.getLicense)
+	r.With(operate).Patch("/licenses/{id}", a.updateLicense)
+	r.With(admin).Delete("/licenses/{id}", a.deleteLicense)
+	r.With(admin).Post("/licenses/{id}/key/reveal", a.revealLicenseKey)
+	r.With(read).Get("/licenses/{id}/installations", a.licenseInstallations)
+	r.With(operate).Post("/licenses/{id}/assignments", a.addLicenseAssignment)
+	r.With(operate).Delete("/licenses/{id}/assignments/{aid}", a.removeLicenseAssignment)
+	r.With(read).Get("/assets/{id}/licenses", a.assetLicenses)
+
 	r.With(read).Get("/settings", a.getSettings)
 	r.With(admin).Put("/settings", a.putSettings)
 }
