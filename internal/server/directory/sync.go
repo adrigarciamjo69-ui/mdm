@@ -72,6 +72,11 @@ func (s *Syncer) Run(ctx context.Context) error {
 		return s.d.Store.RecordDirectorySync(ctx, err.Error(), 0, now)
 	}
 	users, err := s.client.Users(ctx, cr)
+	if err == nil && len(users) == 0 {
+		// Una respuesta vacía (permisos mal concedidos, filtro…) marcaría a
+		// todo el mundo como eliminado: se trata como un error.
+		err = errors.New("Entra ID no ha devuelto ningún usuario: revisa el permiso User.Read.All y el consentimiento del administrador")
+	}
 	if err == nil {
 		err = s.d.Store.ApplyDirectorySync(ctx, users, now)
 	}

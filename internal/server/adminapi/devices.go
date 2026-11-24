@@ -118,7 +118,7 @@ func (a *api) deviceFilter(w http.ResponseWriter, r *http.Request) (store.Device
 		Now: a.d.Now(), CheckinIntervalS: a.d.CheckinIntervalS,
 	}
 	switch f.Platform {
-	case "", protocol.PlatformWindows, protocol.PlatformLinux:
+	case "", protocol.PlatformWindows, protocol.PlatformLinux, "android":
 	default:
 		badRequest(w, "Plataforma desconocida.")
 		return f, false

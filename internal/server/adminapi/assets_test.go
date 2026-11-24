@@ -380,3 +380,14 @@ func TestAssetHistory(t *testing.T) {
 		t.Fatalf("historial: %+v", h)
 	}
 }
+
+func TestAssetsAPI_AndroidPlatformFilter(t *testing.T) {
+	a := newTestAPI(t)
+	ro := a.loginAs(auth.RoleReadonly)
+	a.seedDevice(seed{Hostname: "PC1"})
+	resp := ro.do("GET", "/assets?origin=agent&platform=android", nil)
+	wantStatus(t, resp, 200)
+	if p := decode[pageResp[assetResp]](t, resp); p.Total != 0 {
+		t.Fatalf("móviles: %d", p.Total)
+	}
+}

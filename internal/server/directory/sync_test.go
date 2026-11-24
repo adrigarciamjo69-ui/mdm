@@ -128,3 +128,17 @@ func TestSync_NotConfiguredDoesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSync_EmptyResultKeepsEveryone(t *testing.T) {
+	s, f, sy := setup(t)
+	_ = sy.Run(ctx)
+	f.Users = nil
+	_ = sy.Run(ctx)
+	if got := names(t, s, "deleted"); len(got) != 0 {
+		t.Fatalf("una respuesta vacía ha marcado como eliminados a %v", got)
+	}
+	cfg, _ := s.EntraConfig(ctx)
+	if !strings.Contains(cfg.LastError, "ningún usuario") {
+		t.Fatalf("error: %q", cfg.LastError)
+	}
+}
