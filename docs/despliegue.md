@@ -76,6 +76,18 @@ Guarda también el fichero `.env`. Sin la contraseña de PostgreSQL no podrás u
 
 La fase 2 añade la variable obligatoria `MDM_SECRET_KEY`. Antes de actualizar, añádela al `.env` (`openssl rand -base64 32`). Sin ella, el servidor no arranca y explica por qué.
 
+## Contraseñas
+
+Cada persona cambia la suya desde la consola con **Cambiar mi contraseña** (bajo su correo, en el menú lateral). Le pide la actual y cierra sus demás sesiones.
+
+Un administrador restablece la de otra cuenta en **Administradores › Restablecer contraseña**. Las sesiones abiertas de esa cuenta se cierran; hazle llegar la contraseña nueva de forma segura. Ambas acciones quedan en la auditoría.
+
+Si nadie puede entrar en la consola, se cambia desde el servidor:
+
+```sh
+docker compose exec server /mdm-server admin reset-password --email persona@empresa.es
+```
+
 ## Recuperar el acceso
 
 Si un administrador pierde el teléfono con el segundo factor, otro administrador no puede restablecerlo desde la consola; se hace desde el servidor:

@@ -88,4 +88,44 @@ describe("Administradores", () => {
     await userEvent.setup().click(row.getByRole("button", { name: "Reactivar" }));
     await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ disabled: false }));
   });
+  it("restablece la contraseña de otra cuenta", async () => {
+    const calls = setup({ "POST /admins/a2/password": { status: 204 } });
+    renderApp("/administradores");
+    const user = userEvent.setup();
+    const row = within((await screen.findByRole("cell", { name: "luis@ejemplo.es" })).closest("tr")!);
+    await user.click(row.getByRole("button", { name: "Restablecer la contraseña de luis@ejemplo.es" }));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.queryByLabelText("Contraseña actual")).toBeNull();
+    await user.type(dialog.getByLabelText("Contraseña nueva"), "nueva-clave-larga-3");
+    await user.type(dialog.getByLabelText("Repite la contraseña nueva"), "otra-distinta-xx-4");
+    await user.click(dialog.getByRole("button", { name: "Cambiar contraseña" }));
+    expect(await dialog.findByRole("alert")).toHaveTextContent("Las contraseñas no coinciden.");
+    await user.clear(dialog.getByLabelText("Repite la contraseña nueva"));
+    await user.type(dialog.getByLabelText("Repite la contraseña nueva"), "nueva-clave-larga-3");
+    await user.click(dialog.getByRole("button", { name: "Cambiar contraseña" }));
+    await waitFor(() => expect(calls.find((c) => c.path === "/admins/a2/password")?.body).toEqual({ password: "nueva-clave-larga-3" }));
+    expect(await screen.findByText(/Contraseña de luis@ejemplo.es cambiada/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("no ofrece restablecer la contraseña propia desde la lista", async () => {
+    setup();
+    renderApp("/administradores");
+    const self = within((await screen.findByRole("cell", { name: "ana@ejemplo.es" })).closest("tr")!);
+    expect(self.queryByRole("button", { name: /Restablecer/ })).toBeNull();
+  });
+
+  it("cambia la contraseña propia pidiendo la actual", async () => {
+    const calls = setup({ "POST /auth/password": apiError(400, "invalid_request", "La contraseña actual no es correcta.") });
+    renderApp("/administradores");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Cambiar mi contraseña" }));
+    const dialog = within(screen.getByRole("dialog"));
+    await user.type(dialog.getByLabelText("Contraseña actual"), "mala-mala-mala-1");
+    await user.type(dialog.getByLabelText("Contraseña nueva"), "nueva-clave-larga-3");
+    await user.type(dialog.getByLabelText("Repite la contraseña nueva"), "nueva-clave-larga-3");
+    await user.click(dialog.getByRole("button", { name: "Cambiar contraseña" }));
+    expect(await dialog.findByRole("alert")).toHaveTextContent("La contraseña actual no es correcta.");
+    expect(calls.find((c) => c.path === "/auth/password")?.body).toEqual({ current_password: "mala-mala-mala-1", new_password: "nueva-clave-larga-3" });
+  });
 });

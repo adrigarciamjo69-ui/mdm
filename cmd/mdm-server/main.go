@@ -44,6 +44,7 @@ const usage = `Uso:
   mdm-server admin create --email <correo> [--role admin|operator|readonly]
                                                       Crea un administrador
   mdm-server admin reset-totp --email <correo>        Borra el segundo factor de un administrador
+  mdm-server admin reset-password --email <correo>    Fija una contraseña nueva a un administrador
   mdm-server version                                  Muestra la versión
 
 Configuración (variables de entorno):
@@ -73,6 +74,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		err = adminCreate(args[2:], stdin, stdout, stderr)
 	case args[0] == "admin" && len(args) > 1 && args[1] == "reset-totp":
 		err = adminResetTOTP(args[2:], stdout, stderr)
+	case args[0] == "admin" && len(args) > 1 && args[1] == "reset-password":
+		err = adminResetPassword(args[2:], stdin, stdout, stderr)
 	case args[0] == "help" || args[0] == "-h" || args[0] == "--help":
 		fmt.Fprint(stdout, usage)
 	default:
@@ -269,5 +272,48 @@ func adminResetTOTP(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(stdout, "Segundo factor de %s borrado. Lo configurará de nuevo en su próximo acceso.\n", admin.Email)
+	return nil
+}
+
+// adminResetPassword fija una contraseña nueva desde el servidor, para cuando
+// nadie puede entrar en la consola a restablecerla. Cierra todas sus sesiones.
+func adminResetPassword(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("admin reset-password", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	email := fs.String("email", "", "correo del administrador")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *email == "" {
+		return errors.New("indica el correo con --email <correo>")
+	}
+	password, err := readNewPassword(stdin, stderr)
+	if err != nil {
+		return err
+	}
+	if err := auth.ValidatePassword(password); err != nil {
+		return err
+	}
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	s, err := openStore(ctx)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	admin, err := s.AdminByEmail(ctx, *email)
+	if errors.Is(err, store.ErrNotFound) {
+		return fmt.Errorf("no existe ningún administrador con el correo %s", *email)
+	}
+	if err != nil {
+		return err
+	}
+	if err := s.SetAdminPassword(ctx, admin.ID, hash, ""); err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "Contraseña de %s cambiada. Sus sesiones abiertas se han cerrado.\n", admin.Email)
 	return nil
 }

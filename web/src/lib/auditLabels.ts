@@ -6,6 +6,8 @@ const LABELS: Record<string, string> = {
   "totp.enrolled": "Configuró el segundo factor",
   "admin.created": "Creó una cuenta de administrador",
   "admin.updated": "Modificó una cuenta de administrador",
+  "password.changed": "Cambió su contraseña",
+  "password.reset": "Restableció la contraseña de una cuenta",
   "token.created": "Creó un token de inscripción",
   "token.revoked": "Revocó un token de inscripción",
   "device.enrolled": "Se inscribió un dispositivo",

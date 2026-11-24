@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { roleLabel } from "../lib/format";
+import PasswordDialog from "./PasswordDialog";
 import type { Role } from "../api/types";
 
 const links: { to: string; label: string; min: Role; end?: boolean }[] = [
@@ -35,6 +37,8 @@ function useOpenAlerts(enabled: boolean): number {
 export default function Layout() {
   const { me, can, logout } = useAuth();
   const openAlerts = useOpenAlerts(!!me);
+  const [changing, setChanging] = useState(false);
+  const [notice, setNotice] = useState("");
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -55,13 +59,22 @@ export default function Layout() {
           <div className="whoami">
             <span className="whoami-email">{me.email}</span>
             <span className="whoami-role">{roleLabel(me.role)}</span>
+            <button className="btn btn-quiet" onClick={() => setChanging(true)}>Cambiar mi contraseña</button>
             <button className="btn btn-quiet" onClick={() => void logout()}>Cerrar sesión</button>
           </div>
         )}
       </aside>
       <main className="content" id="contenido">
+        {notice && (
+          <p className="form-ok" role="status">
+            {notice} <button className="btn btn-quiet btn-small" onClick={() => setNotice("")}>Cerrar</button>
+          </p>
+        )}
         <Outlet />
       </main>
+      {changing && (
+        <PasswordDialog onDone={(msg) => { setChanging(false); setNotice(msg); }} onCancel={() => setChanging(false)} />
+      )}
     </div>
   );
 }

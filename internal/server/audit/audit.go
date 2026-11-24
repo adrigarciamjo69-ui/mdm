@@ -12,23 +12,25 @@ import (
 
 // Acciones registradas.
 const (
-	LoginOK        = "login.ok"
-	LoginFailed    = "login.failed"
-	Logout         = "logout"
-	TOTPEnrolled   = "totp.enrolled"
-	AdminCreated   = "admin.created"
-	AdminUpdated   = "admin.updated"
-	TokenCreated   = "token.created"
-	TokenRevoked   = "token.revoked"
-	DeviceEnrolled = "device.enrolled"
-	DeviceReenroll = "device.reenrolled"
-	DeviceUpdated  = "device.updated"
-	DeviceRevoked  = "device.revoked"
-	DeviceDeleted  = "device.deleted"
-	GroupCreated   = "group.created"
-	GroupUpdated   = "group.updated"
-	GroupDeleted   = "group.deleted"
-	DevicesExport  = "devices.exported"
+	LoginOK         = "login.ok"
+	LoginFailed     = "login.failed"
+	Logout          = "logout"
+	TOTPEnrolled    = "totp.enrolled"
+	AdminCreated    = "admin.created"
+	AdminUpdated    = "admin.updated"
+	PasswordChanged = "password.changed"
+	PasswordReset   = "password.reset"
+	TokenCreated    = "token.created"
+	TokenRevoked    = "token.revoked"
+	DeviceEnrolled  = "device.enrolled"
+	DeviceReenroll  = "device.reenrolled"
+	DeviceUpdated   = "device.updated"
+	DeviceRevoked   = "device.revoked"
+	DeviceDeleted   = "device.deleted"
+	GroupCreated    = "group.created"
+	GroupUpdated    = "group.updated"
+	GroupDeleted    = "group.deleted"
+	DevicesExport   = "devices.exported"
 
 	SettingsUpdated       = "settings.updated"
 	PolicyCreated         = "policy.created"
@@ -82,7 +84,7 @@ const (
 )
 
 // Actions lista todas las acciones, para validar filtros y poblar la consola.
-var Actions = []string{LoginOK, LoginFailed, Logout, TOTPEnrolled, AdminCreated, AdminUpdated,
+var Actions = []string{LoginOK, LoginFailed, Logout, TOTPEnrolled, AdminCreated, AdminUpdated, PasswordChanged, PasswordReset,
 	TokenCreated, TokenRevoked, DeviceEnrolled, DeviceReenroll, DeviceUpdated, DeviceRevoked,
 	DeviceDeleted, GroupCreated, GroupUpdated, GroupDeleted, DevicesExport, SettingsUpdated,
 	PolicyCreated, PolicyUpdated, PolicyDeleted, PolicyAssigned, BatchCreated, CommandCancel, DeviceRetired,

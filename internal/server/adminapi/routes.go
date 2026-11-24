@@ -39,6 +39,7 @@ func (a *api) routes(r chi.Router) {
 	r.With(admin).Get("/admins", a.listAdmins)
 	r.With(admin).Post("/admins", a.createAdmin)
 	r.With(admin).Patch("/admins/{id}", a.updateAdmin)
+	r.With(admin).Post("/admins/{id}/password", a.resetAdminPassword)
 	r.With(admin).Get("/audit", a.listAudit)
 
 	r.With(read).Get("/policies", a.listPolicies)

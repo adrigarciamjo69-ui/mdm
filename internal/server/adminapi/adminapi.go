@@ -69,6 +69,7 @@ func New(d Deps) http.Handler {
 		r.Use(a.requireSession(auth.RoleReadonly))
 		r.Get("/auth/me", a.me)
 		r.Post("/auth/logout", a.logout)
+		r.Post("/auth/password", a.changeOwnPassword)
 	})
 	a.routes(r)
 	return r

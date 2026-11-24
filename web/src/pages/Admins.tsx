@@ -4,6 +4,7 @@ import { api, ApiError } from "../api/client";
 import type { Admin, Role } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import ConfirmDialog from "../components/ConfirmDialog";
+import PasswordDialog from "../components/PasswordDialog";
 import { formatDateTime, relativeTime, roleLabel } from "../lib/format";
 
 const ROLES: Role[] = ["readonly", "operator", "admin"];
@@ -18,7 +19,9 @@ export default function Admins() {
   const queryClient = useQueryClient();
   const admins = useQuery({ queryKey: ["admins"], queryFn: () => api<Admin[]>("GET", "/admins") });
   const [disabling, setDisabling] = useState<Admin | null>(null);
+  const [resetting, setResetting] = useState<Admin | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admins"] });
 
@@ -52,6 +55,7 @@ export default function Admins() {
       <section className="section">
         <h2>Cuentas</h2>
         {error && <p className="form-error" role="alert">{error}</p>}
+        {notice && <p className="form-ok" role="status">{notice}</p>}
         {admins.error ? (
           <p className="form-error" role="alert">No se han podido cargar las cuentas.</p>
         ) : !admins.data ? (
@@ -87,10 +91,17 @@ export default function Admins() {
                       <td className="num nowrap">
                         {self ? (
                           <span className="muted">Tu cuenta</span>
-                        ) : a.disabled ? (
-                          <button className="btn btn-small" onClick={() => void patch(a, { disabled: false })}>Reactivar</button>
                         ) : (
-                          <button className="btn btn-small" onClick={() => setDisabling(a)}>Desactivar</button>
+                          <>
+                            <button className="btn btn-small" aria-label={`Restablecer la contraseña de ${a.email}`} onClick={() => { setNotice(""); setResetting(a); }}>
+                              Restablecer contraseña
+                            </button>{" "}
+                            {a.disabled ? (
+                              <button className="btn btn-small" onClick={() => void patch(a, { disabled: false })}>Reactivar</button>
+                            ) : (
+                              <button className="btn btn-small" onClick={() => setDisabling(a)}>Desactivar</button>
+                            )}
+                          </>
                         )}
                       </td>
                     </tr>
@@ -110,6 +121,14 @@ export default function Admins() {
           danger
           onConfirm={() => disable(disabling)}
           onCancel={() => setDisabling(null)}
+        />
+      )}
+
+      {resetting && (
+        <PasswordDialog
+          target={resetting}
+          onDone={(msg) => { setResetting(null); setNotice(msg); }}
+          onCancel={() => setResetting(null)}
         />
       )}
     </>

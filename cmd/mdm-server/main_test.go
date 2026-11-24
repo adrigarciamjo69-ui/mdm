@@ -71,6 +71,34 @@ func TestCLI_AdminCreateAndResetTOTP(t *testing.T) {
 	}
 }
 
+func TestCLI_AdminResetPassword(t *testing.T) {
+	s, url := storetest.NewWithURL(t)
+	t.Setenv("MDM_DATABASE_URL", url)
+	ctx := context.Background()
+	if code, _, errOut := runCLI(t, "correcta-y-larga-1\n", "admin", "create", "--email", "ana@ejemplo.es"); code != 0 {
+		t.Fatalf("crear: %d %s", code, errOut)
+	}
+	a, _ := s.AdminByEmail(ctx, "ana@ejemplo.es")
+	_ = s.CreateSession(ctx, store.Session{TokenHash: "h", AdminID: a.ID, CSRFToken: "c", CreatedAt: a.CreatedAt, ExpiresAt: a.CreatedAt.AddDate(1, 0, 0)})
+
+	if code, _, errOut := runCLI(t, "corta\n", "admin", "reset-password", "--email", "ana@ejemplo.es"); code != 1 || !strings.Contains(errOut, "12 caracteres") {
+		t.Fatalf("contraseña corta: %d %s", code, errOut)
+	}
+	if code, _, errOut := runCLI(t, "otra-clave-bien-larga-2\n", "admin", "reset-password", "--email", "nadie@ejemplo.es"); code != 1 || !strings.Contains(errOut, "no existe") {
+		t.Fatalf("correo inexistente: %d %s", code, errOut)
+	}
+	if code, out, errOut := runCLI(t, "otra-clave-bien-larga-2\n", "admin", "reset-password", "--email", "ana@ejemplo.es"); code != 0 || !strings.Contains(out, "ana@ejemplo.es") {
+		t.Fatalf("reset-password: %d %s %s", code, out, errOut)
+	}
+	a, _ = s.AdminByEmail(ctx, "ana@ejemplo.es")
+	if !auth.VerifyPassword(a.PasswordHash, "otra-clave-bien-larga-2") || auth.VerifyPassword(a.PasswordHash, "correcta-y-larga-1") {
+		t.Error("la contraseña no cambió")
+	}
+	if _, _, err := s.SessionByTokenHash(ctx, "h", a.CreatedAt); err != store.ErrNotFound {
+		t.Errorf("las sesiones no se cerraron: %v", err)
+	}
+}
+
 func TestCLI_MissingDatabaseURL(t *testing.T) {
 	t.Setenv("MDM_DATABASE_URL", "")
 	if code, _, errOut := runCLI(t, "correcta-y-larga-1\n", "admin", "create", "--email", "ana@ejemplo.es"); code != 1 || !strings.Contains(errOut, "MDM_DATABASE_URL") {

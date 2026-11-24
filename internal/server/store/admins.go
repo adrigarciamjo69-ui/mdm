@@ -122,3 +122,25 @@ func (s *Store) TouchAdminLogin(ctx context.Context, id uuid.UUID, at time.Time)
 	_, err := s.pool.Exec(ctx, `UPDATE admins SET last_login_at = $2 WHERE id = $1`, id, at)
 	return err
 }
+
+// SetAdminPassword cambia la contraseña de un administrador y cierra sus
+// sesiones, salvo la indicada en keepSession (la del propio usuario cuando
+// cambia la suya; "" para cerrarlas todas).
+func (s *Store) SetAdminPassword(ctx context.Context, id uuid.UUID, passwordHash, keepSession string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx, `UPDATE admins SET password_hash = $2 WHERE id = $1`, id, passwordHash)
+	if err != nil {
+		return fmt.Errorf("cambiar contraseña: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE admin_id = $1 AND id <> $2`, id, keepSession); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
