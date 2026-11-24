@@ -197,6 +197,17 @@ func (a *api) routes(r chi.Router) {
 	r.With(operate).Delete("/licenses/{id}/assignments/{aid}", a.removeLicenseAssignment)
 	r.With(read).Get("/assets/{id}/licenses", a.assetLicenses)
 
+	r.With(read).Get("/deliveries", a.listDeliveries)
+	r.With(operate).Post("/deliveries", a.createDelivery)
+	r.With(read).Get("/deliveries/{id}", a.getDelivery)
+	r.With(operate).Patch("/deliveries/{id}", a.updateDelivery)
+	r.With(admin).Delete("/deliveries/{id}", a.deleteDelivery)
+	r.With(operate).Post("/deliveries/{id}/confirm", a.confirmDelivery)
+	r.With(admin).Post("/deliveries/{id}/cancel", a.cancelDelivery)
+	r.With(read).Get("/assets/{id}/deliveries", a.assetDeliveries)
+	r.With(read).Get("/delivery-settings", a.getDeliverySettings)
+	r.With(admin).Put("/delivery-settings", a.putDeliverySettings)
+
 	r.With(read).Get("/settings", a.getSettings)
 	r.With(admin).Put("/settings", a.putSettings)
 }
