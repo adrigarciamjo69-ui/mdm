@@ -21,7 +21,7 @@ var SettingKeys = map[string][]string{
 	PlatformWindows: {
 		"windows.bitlocker", "windows.firewall", "windows.defender_realtime", "windows.screen_lock",
 		"windows.password_policy", "windows.usb_storage", "windows.smb1", "windows.guest_account",
-		"windows.autologon", "windows.remote_desktop",
+		"windows.autologon", "windows.remote_desktop", "windows.domain_join", "windows.power",
 	},
 	PlatformLinux: {
 		"linux.firewall", "linux.auto_security_updates", "linux.ssh", "linux.disk_encryption", "linux.forbidden_packages",

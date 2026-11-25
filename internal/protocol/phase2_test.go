@@ -67,7 +67,7 @@ func TestRequiredCapability(t *testing.T) {
 }
 
 func TestSettingKeys(t *testing.T) {
-	if len(SettingKeys["windows"]) != 10 || len(SettingKeys["linux"]) != 5 {
+	if len(SettingKeys["windows"]) != 12 || len(SettingKeys["linux"]) != 5 {
 		t.Fatalf("claves: %d windows, %d linux", len(SettingKeys["windows"]), len(SettingKeys["linux"]))
 	}
 	if CustomScriptKey != "custom.script" {

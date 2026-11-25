@@ -99,3 +99,46 @@ func TestNormalizeAppliesDefaults(t *testing.T) {
 		t.Fatalf("timeout por defecto: %s", s.Params)
 	}
 }
+
+func TestDomainJoinAndPower(t *testing.T) {
+	ok := []Setting{
+		st("windows.domain_join", "enforce", `{"domain":"empresa.local","username":"EMPRESA\\alta","password":"secreta","restart":"manual"}`),
+		st("windows.domain_join", "enforce", `{"domain":"empresa.local","ou":"OU=Equipos,DC=empresa,DC=local","username":"alta@empresa.local","password":"x"}`),
+		st("windows.domain_join", "audit", `{"domain":"empresa.local","username":"a","password":"v1:abc"}`),
+		st("windows.power", "enforce", `{}`),
+		st("windows.power", "enforce", `{"plan":"balanced","monitor_ac":15,"monitor_dc":5,"sleep_ac":0,"sleep_dc":30,"hibernate":"off"}`),
+	}
+	for _, s := range ok {
+		if err := ValidateSetting("windows", s); err != nil {
+			t.Errorf("%s %s: %v", s.Key, s.Params, err)
+		}
+	}
+	bad := []Setting{
+		st("windows.domain_join", "enforce", `{"username":"a","password":"x"}`),
+		st("windows.domain_join", "enforce", `{"domain":"empresa.local","username":"a"}`),
+		st("windows.domain_join", "enforce", `{"domain":"no es un dominio","username":"a","password":"x"}`),
+		st("windows.domain_join", "enforce", `{"domain":"empresa.local","ou":"Equipos","username":"a","password":"x"}`),
+		st("windows.domain_join", "enforce", `{"domain":"empresa.local","username":"a","password":"x","restart":"ya"}`),
+		st("windows.power", "enforce", `{"monitor_ac":601}`),
+		st("windows.power", "enforce", `{"plan":"turbo"}`),
+		st("windows.power", "enforce", `{"hibernate":"quizá"}`),
+	}
+	for i, s := range bad {
+		err := ValidateSetting("windows", s)
+		if err == nil {
+			t.Errorf("caso %d (%s) debería fallar", i, s.Params)
+		} else if !strings.HasSuffix(err.Error(), ".") {
+			t.Errorf("caso %d: el mensaje debe ser una frase: %v", i, err)
+		}
+	}
+	d, _ := Find("windows", "windows.power")
+	for _, f := range d.Fields {
+		if f.Type == TypeEnum {
+			for _, o := range f.Options {
+				if f.OptionLabels[o] == "" {
+					t.Errorf("%s: la opción %q no tiene etiqueta", f.Name, o)
+				}
+			}
+		}
+	}
+}

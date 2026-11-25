@@ -30,16 +30,18 @@ const (
 )
 
 type Field struct {
-	Name        string   `json:"name"`
-	Label       string   `json:"label"`
-	Type        string   `json:"type"`
-	Required    bool     `json:"required"`
-	Default     any      `json:"default,omitempty"`
-	Min         int      `json:"min,omitempty"`
-	Max         int      `json:"max,omitempty"`
-	Options     []string `json:"options,omitempty"`
-	MaxLen      int      `json:"max_len,omitempty"`
-	Description string   `json:"description,omitempty"`
+	Name     string   `json:"name"`
+	Label    string   `json:"label"`
+	Type     string   `json:"type"`
+	Required bool     `json:"required"`
+	Default  any      `json:"default,omitempty"`
+	Min      int      `json:"min,omitempty"`
+	Max      int      `json:"max,omitempty"`
+	Options  []string `json:"options,omitempty"`
+	// OptionLabels son los textos de las opciones de un enum en la consola.
+	OptionLabels map[string]string `json:"option_labels,omitempty"`
+	MaxLen       int               `json:"max_len,omitempty"`
+	Description  string            `json:"description,omitempty"`
 }
 
 type Def struct {
@@ -98,6 +100,28 @@ var Catalog = []Def{
 	{Key: "windows.remote_desktop", Platform: "windows", Title: "Escritorio remoto",
 		Description: "Permite o deniega las conexiones de Escritorio remoto al equipo.",
 		Fields:      []Field{{Name: "allowed", Label: "Permitir", Type: TypeBool, Default: false}}},
+	withCheck(Def{Key: "windows.domain_join", Platform: "windows", Title: "Unir al dominio",
+		Description: "Une el equipo al dominio de Active Directory. Si no encuentra un controlador (sin VPN ni red de la oficina), lo reintenta en cada evaluación. No saca al equipo de otro dominio.",
+		Fields: []Field{
+			{Name: "domain", Label: "Dominio", Type: TypeString, Required: true, MaxLen: 255, Description: "Nombre DNS completo, por ejemplo empresa.local."},
+			{Name: "ou", Label: "Unidad organizativa (opcional)", Type: TypeString, MaxLen: 512, Description: "Por ejemplo OU=Equipos,DC=empresa,DC=local. Vacío: la predeterminada."},
+			{Name: "username", Label: "Cuenta con permiso para unir equipos", Type: TypeString, Required: true, MaxLen: 256, Description: "EMPRESA\\usuario o usuario@empresa.local."},
+			{Name: "password", Label: "Contraseña de esa cuenta", Type: TypeSecret, Required: true, MaxLen: 256},
+			{Name: "restart", Label: "Reinicio tras unirse", Type: TypeEnum, Default: "warn_5min", Options: []string{"warn_5min", "manual"},
+				OptionLabels: map[string]string{"warn_5min": "Reiniciar con aviso de 5 minutos", "manual": "No reiniciar (lo hará el usuario)"}},
+		}}, checkDomainJoin),
+	{Key: "windows.power", Platform: "windows", Title: "Energía",
+		Description: "Plan de energía, apagado de pantalla, suspensión e hibernación. Lo que dejes vacío no se toca.",
+		Fields: []Field{
+			{Name: "plan", Label: "Plan de energía", Type: TypeEnum, Options: []string{"balanced", "high_performance", "power_saver"},
+				OptionLabels: map[string]string{"balanced": "Equilibrado", "high_performance": "Alto rendimiento", "power_saver": "Economizador"}},
+			{Name: "monitor_ac", Label: "Apagar la pantalla, enchufado (minutos, 0 = nunca)", Type: TypeInt, Min: 0, Max: 600},
+			{Name: "monitor_dc", Label: "Apagar la pantalla, con batería (minutos, 0 = nunca)", Type: TypeInt, Min: 0, Max: 600},
+			{Name: "sleep_ac", Label: "Suspender, enchufado (minutos, 0 = nunca)", Type: TypeInt, Min: 0, Max: 600},
+			{Name: "sleep_dc", Label: "Suspender, con batería (minutos, 0 = nunca)", Type: TypeInt, Min: 0, Max: 600},
+			{Name: "hibernate", Label: "Hibernación", Type: TypeEnum, Options: []string{"off", "on"},
+				OptionLabels: map[string]string{"off": "Desactivada", "on": "Activada"}},
+		}},
 	customScript("windows", []string{"powershell"}),
 
 	{Key: "linux.firewall", Platform: "linux", Title: "Cortafuegos activado",
@@ -154,12 +178,24 @@ func android(key, title, desc string, fields ...Field) Def {
 	return Def{Key: key, Platform: "android", Title: title, Description: desc, EnforceOnly: true, Fields: fields}
 }
 
+func checkDomainJoin(p map[string]any) error {
+	if d, _ := p["domain"].(string); !domainRe.MatchString(d) {
+		return fmt.Errorf("El dominio debe ser un nombre DNS completo, por ejemplo empresa.local.")
+	}
+	if ou, _ := p["ou"].(string); ou != "" && !ouRe.MatchString(ou) {
+		return fmt.Errorf("La unidad organizativa debe tener la forma OU=Equipos,DC=empresa,DC=local.")
+	}
+	return nil
+}
+
 func withCheck(d Def, f func(map[string]any) error) Def {
 	d.check = f
 	return d
 }
 
 var (
+	domainRe  = regexp.MustCompile(`^(?i)[a-z0-9]([a-z0-9-]{0,62}\.)+[a-z0-9-]{2,63}$`)
+	ouRe      = regexp.MustCompile(`^(?i)(OU|CN)=[^=]+(,\s*(OU|CN|DC)=[^=,]+)*$`)
 	hhmmRe    = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
 	packageRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$`)
 )
