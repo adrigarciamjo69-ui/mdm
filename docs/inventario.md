@@ -25,6 +25,15 @@ La categoría de los equipos con agente se elige sola (portátil, sobremesa o se
 
 Un administrador puede **desenlazar** un activo de su equipo si la unión fue un error: el activo queda como manual y el equipo recibe uno nuevo.
 
+### Fusionar a mano
+
+Cuando dos fichas son el mismo objeto pero no se unieron solas (sin número de serie, o con uno distinto en la ficha manual), selecciona las dos en Inventario y pulsa **Fusionar** (administradores):
+
+- Eliges qué ficha se conserva (por defecto, la del equipo con agente) y, campo a campo, de cuál se toma el valor. De entrada se toma el de la ficha conservada y, si lo tiene vacío, el de la otra. Las notas se pueden juntar.
+- Los documentos, las licencias asignadas (sin duplicar) y las actas de la otra pasan a la ficha resultante; la otra va a la papelera con el motivo «Fusionado con…».
+- Si una de las dos tiene agente, el equipo se queda con la ficha resultante. Dos fichas con agente no se fusionan: para el MDM son dos equipos distintos (si es el mismo equipo inscrito dos veces, elimina el que sobra).
+- Queda en la auditoría.
+
 ### Documentos y papelera
 
 Cada activo tiene **Documentos** (facturas, garantías, albaranes, fotos): PDF, Word, Excel, imágenes, texto o ZIP, hasta 20 MB. Se guardan en el volumen `files`, que debe entrar en las copias de seguridad.
@@ -78,4 +87,4 @@ Los datos de la empresa, el logotipo, los colores y las cláusulas del PDF se co
 |---|---|
 | Ver inventario, usuarios, licencias y actas; exportar | Solo lectura |
 | Crear y editar activos y licencias, asignar, importar, documentos, restaurar de la papelera, crear y confirmar actas, sincronizar usuarios | Operador |
-| Mandar a la papelera y eliminar definitivamente, eliminar licencias y borradores de actas, anular actas, enlazar y desenlazar, ver claves, categorías, Entra ID y datos de las actas | Administrador |
+| Mandar a la papelera y eliminar definitivamente, eliminar licencias y borradores de actas, anular actas, enlazar, desenlazar y fusionar, ver claves, categorías, Entra ID y datos de las actas | Administrador |

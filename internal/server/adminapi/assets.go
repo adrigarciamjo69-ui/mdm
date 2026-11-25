@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -662,4 +663,51 @@ func (a *api) assetHistory(w http.ResponseWriter, r *http.Request) {
 			TargetType: e.TargetType, TargetID: e.TargetID, Details: e.Details, IP: e.IP})
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// mergeAssets une dos fichas del mismo objeto eligiendo de cuál se toma cada
+// campo. El otro activo va a la papelera.
+func (a *api) mergeAssets(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		KeepID    string   `json:"keep_id"`
+		OtherID   string   `json:"other_id"`
+		FromOther []string `json:"from_other"`
+		NotesBoth bool     `json:"notes_both"`
+	}
+	if !httpx.DecodeJSON(w, r, maxBody, &body) {
+		return
+	}
+	keep, err1 := uuid.Parse(body.KeepID)
+	other, err2 := uuid.Parse(body.OtherID)
+	if err1 != nil || err2 != nil || keep == other {
+		badRequest(w, "Elige dos activos distintos: el que se conserva (keep_id) y el otro (other_id).")
+		return
+	}
+	from := map[string]bool{}
+	for _, f := range body.FromOther {
+		if !slices.Contains(store.MergeFields, f) {
+			badRequest(w, "Campo desconocido: "+f+".")
+			return
+		}
+		from[f] = true
+	}
+	admin := adminFrom(r.Context())
+	merged, err := a.d.Store.MergeAssets(r.Context(), store.AssetMerge{KeepID: keep, OtherID: other, FromOther: from,
+		NotesBoth: body.NotesBoth, By: &admin.ID})
+	switch {
+	case errors.Is(err, store.ErrConflict):
+		conflict(w, "Los dos activos tienen un equipo con agente: para el MDM son dos equipos distintos. Si es el mismo equipo inscrito dos veces, elimina el que sobra en su ficha y vuelve a intentarlo.")
+		return
+	case errors.Is(err, store.ErrNotFound):
+		notFound(w, "Alguno de los activos ya no existe o está en la papelera.")
+		return
+	case errors.Is(err, store.ErrSerialTaken), errors.Is(err, store.ErrTagTaken), errors.Is(err, store.ErrInvalid):
+		badRequest(w, "No se puede fusionar con esos valores: el nombre es obligatorio y el número de serie y la etiqueta no pueden estar en otro activo.")
+		return
+	case err != nil:
+		a.serverError(w, r, err)
+		return
+	}
+	a.auditAsset(r, audit.AssetMerged, merged.ID, map[string]any{"merged_from": other.String(), "from_other": body.FromOther, "notes_both": body.NotesBoth})
+	a.writeAsset(w, r, http.StatusOK, merged.ID)
 }

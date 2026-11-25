@@ -89,6 +89,7 @@ const (
 	AssetPurged           = "asset.purged"
 	AssetLinked           = "asset.linked"
 	AssetUnlinked         = "asset.unlinked"
+	AssetMerged           = "asset.merged"
 	AssetsBulkUpdated     = "assets.bulk_updated"
 	AssetsImported        = "assets.imported"
 	AssetsExported        = "assets.exported"
@@ -127,7 +128,7 @@ var Actions = []string{LoginOK, LoginFailed, Logout, TOTPEnrolled, AdminCreated,
 	AlertRuleCreated, AlertRuleUpdated, AlertRuleDeleted, AlertAcknowledged, AlertResolved,
 	ReportExported, ReportScheduleCreated, ReportScheduleUpdated, ReportScheduleDeleted,
 	AutomationCreated, AutomationUpdated, AutomationDeleted,
-	AssetCreated, AssetUpdated, AssetTrashed, AssetRestored, AssetPurged, AssetLinked, AssetUnlinked,
+	AssetCreated, AssetUpdated, AssetTrashed, AssetRestored, AssetPurged, AssetLinked, AssetUnlinked, AssetMerged,
 	AssetsBulkUpdated, AssetsImported, AssetsExported, AssetDocumentAdded, AssetDocumentDeleted,
 	CategoryCreated, CategoryUpdated, CategoryDeleted, DirectoryConfigured, DirectorySynced, DirectoryUserUpdated,
 	LicenseCreated, LicenseUpdated, LicenseDeleted, LicenseKeyViewed, LicenseAssigned, LicenseUnassigned,

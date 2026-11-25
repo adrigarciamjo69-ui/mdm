@@ -158,6 +158,7 @@ func (a *api) routes(r chi.Router) {
 	r.With(operate).Post("/assets/import", a.importAssets)
 	r.With(operate).Post("/assets/bulk", a.bulkAssets)
 	r.With(operate).Post("/assets", a.createAsset)
+	r.With(admin).Post("/assets/merge", a.mergeAssets)
 	r.With(read).Get("/assets/{id}", a.getAsset)
 	r.With(operate).Patch("/assets/{id}", a.updateAsset)
 	r.With(admin).Delete("/assets/{id}", a.trashAssetHandler)

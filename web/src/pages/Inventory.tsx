@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, query } from "../api/client";
 import type { Asset, AssetStatus, Category, Group, Page, PersonRef } from "../api/types";
@@ -9,6 +9,7 @@ import Pagination from "../components/Pagination";
 import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
 import ActionBar from "../components/ActionBar";
+import MergeDialog from "../components/MergeDialog";
 import PersonPicker from "../components/PersonPicker";
 import { useDebounced } from "../lib/hooks";
 import { ASSET_STATUS_CLASS, ASSET_STATUS_LABEL, ISSUE_LABELS } from "../lib/inventory";
@@ -43,6 +44,8 @@ export default function Inventory() {
   const [params, setParams] = useSearchParams();
   const [selected, setSelected] = useState<Map<string, Asset>>(new Map());
   const [bulk, setBulk] = useState(false);
+  const [merge, setMerge] = useState(false);
+  const navigate = useNavigate();
   const [search, setSearch] = useState(params.get("q") ?? "");
   const debounced = useDebounced(search.trim(), 300);
 
@@ -169,6 +172,7 @@ export default function Inventory() {
             <div className="action-bar" role="toolbar" aria-label="Selección">
               <span className="small"><strong>{selected.size === 1 ? "1 seleccionado" : `${selected.size} seleccionados`}</strong></span>
               {can("operator") && <button className="btn btn-small" onClick={() => setBulk(true)}>Cambiar estado, categoría o persona</button>}
+              {can("admin") && selected.size === 2 && <button className="btn btn-small" onClick={() => setMerge(true)}>Fusionar</button>}
               <button className="btn btn-quiet" onClick={() => setSelected(new Map())}>Quitar selección</button>
             </div>
           )}
@@ -188,6 +192,10 @@ export default function Inventory() {
             loading={assets.isPlaceholderData} caption="Inventario" />
           <Pagination page={data.page} perPage={data.per_page} total={data.total} onChange={(p) => update({ page: p > 1 ? String(p) : null }, true)} />
         </>
+      )}
+      {merge && selected.size === 2 && (
+        <MergeDialog a={[...selected.values()][0]} b={[...selected.values()][1]} onClose={() => setMerge(false)}
+          onDone={(id) => { setMerge(false); setSelected(new Map()); navigate(`/inventario/${id}`); }} />
       )}
       {bulk && <BulkDialog ids={[...selected.keys()]} categories={cats.data ?? []} onClose={(done) => { setBulk(false); if (done) setSelected(new Map()); }} />}
     </>

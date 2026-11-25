@@ -21,6 +21,8 @@ type assetResp struct {
 	Category      string  `json:"category"`
 	Name          string  `json:"name"`
 	Serial        string  `json:"serial"`
+	AssetTag      string  `json:"asset_tag"`
+	Location      string  `json:"location"`
 	Status        string  `json:"status"`
 	Origin        string  `json:"origin"`
 	Price         *float64
@@ -390,4 +392,28 @@ func TestAssetsAPI_AndroidPlatformFilter(t *testing.T) {
 	if p := decode[pageResp[assetResp]](t, resp); p.Total != 0 {
 		t.Fatalf("móviles: %d", p.Total)
 	}
+}
+
+func TestAssetsAPI_Merge(t *testing.T) {
+	a := newTestAPI(t)
+	admin, op := a.loginAs(auth.RoleAdmin), a.loginAs(auth.RoleOperator)
+	dev := a.seedDevice(seed{Hostname: "PC-MERGE", Serial: "AGENTE-1"})
+	agentAsset, _ := a.store.AssetByDevice(ctx, dev)
+	m := a.newAsset(op, map[string]any{"category_id": a.categoryID("Portátil"), "name": "Portátil de Ana", "asset_tag": "EL-7", "location": "Bilbao"})
+	body := map[string]any{"keep_id": agentAsset.ID.String(), "other_id": m.ID, "from_other": []string{"name", "asset_tag", "location"}}
+	wantError(t, op.do("POST", "/assets/merge", body), 403, "forbidden")
+	wantError(t, admin.do("POST", "/assets/merge", map[string]any{"keep_id": m.ID, "other_id": m.ID}), 400, "invalid_request")
+	wantError(t, admin.do("POST", "/assets/merge", map[string]any{"keep_id": m.ID, "other_id": agentAsset.ID.String(), "from_other": []string{"precio"}}), 400, "invalid_request")
+	got := decode[assetResp](t, admin.do("POST", "/assets/merge", body))
+	if got.ID != agentAsset.ID.String() || got.Name != "Portátil de Ana" || got.AssetTag != "EL-7" || got.Location != "Bilbao" {
+		t.Fatalf("fusionado: %+v", got)
+	}
+	if e := a.findAudit("asset.merged"); e == nil || !strings.Contains(string(e.Details), m.ID) {
+		t.Fatalf("auditoría: %+v", e)
+	}
+	wantError(t, admin.do("POST", "/assets/merge", body), 404, "not_found")
+
+	other := a.seedDevice(seed{Hostname: "PC-OTRO", Serial: "AGENTE-2"})
+	oa, _ := a.store.AssetByDevice(ctx, other)
+	wantError(t, admin.do("POST", "/assets/merge", map[string]any{"keep_id": agentAsset.ID.String(), "other_id": oa.ID.String()}), 409, "conflict")
 }

@@ -40,6 +40,7 @@ const LABELS: Record<string, string> = {
   "asset.purged": "Eliminó definitivamente un activo",
   "asset.linked": "Enlazó un activo con un equipo",
   "asset.unlinked": "Desenlazó un activo de su equipo",
+  "asset.merged": "Fusionó dos activos",
   "assets.bulk_updated": "Cambió varios activos a la vez",
   "assets.imported": "Importó activos desde CSV",
   "assets.exported": "Exportó el inventario",
