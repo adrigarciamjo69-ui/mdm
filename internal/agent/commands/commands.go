@@ -12,10 +12,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"mdm/internal/agent/exec"
+	"mdm/internal/agent/tempadmin"
 	"mdm/internal/protocol"
 )
 
@@ -38,6 +40,8 @@ type Deps struct {
 	// ScanUpdates e InstallUpdatesNow piden al gestor de parches que actúe ya.
 	ScanUpdates       func()
 	InstallUpdatesNow func()
+	// TempAdmin da y quita el administrador temporal (nulo: no se admite).
+	TempAdmin TempAdmin
 	// Retire desinstala el agente. Se llama después de informar del resultado.
 	Retire func() error
 	// StatePath es el fichero donde se recuerdan las órdenes iniciadas y los
@@ -46,6 +50,12 @@ type Deps struct {
 	ScriptDir string
 	Now       func() time.Time
 	Log       *slog.Logger
+}
+
+// TempAdmin es el gestor de administradores temporales.
+type TempAdmin interface {
+	Grant(ctx context.Context, user string, d time.Duration, reason string) (tempadmin.Grant, error)
+	Revoke(ctx context.Context, user string) ([]string, error)
 }
 
 type persisted struct {
@@ -288,6 +298,35 @@ func (r *Runner) execute(ctx context.Context, c protocol.Command) protocol.Comma
 		return ok()
 	case protocol.CmdRetire:
 		return ok()
+	case protocol.CmdTempAdmin, protocol.CmdTempAdminRevoke:
+		if r.d.TempAdmin == nil {
+			return r.failed("Este agente no gestiona administradores temporales.")
+		}
+		if c.Type == protocol.CmdTempAdmin {
+			var p protocol.TempAdminPayload
+			if err := json.Unmarshal(c.Payload, &p); err != nil || p.Minutes < protocol.TempAdminMinMinutes || p.Minutes > protocol.TempAdminMaxMinutes {
+				return r.failed("La orden no trae una duración válida.")
+			}
+			g, err := r.d.TempAdmin.Grant(ctx, p.User, time.Duration(p.Minutes)*time.Minute, p.Reason)
+			if err != nil {
+				return r.failed(err.Error())
+			}
+			res := ok()
+			res.Stdout = fmt.Sprintf("%s es administrador de este equipo hasta las %s (hora del equipo). Después se le quitará el permiso automáticamente.\n",
+				g.User, g.ExpiresAt.Local().Format("15:04 del 02/01/2006"))
+			return res
+		}
+		var p protocol.TempAdminRevokePayload
+		_ = json.Unmarshal(c.Payload, &p)
+		users, err := r.d.TempAdmin.Revoke(ctx, p.User)
+		res := ok()
+		if len(users) > 0 {
+			res.Stdout = fmt.Sprintf("Se ha quitado el permiso de administrador a: %s.\n", strings.Join(users, ", "))
+		}
+		if err != nil {
+			res.Status, res.Error = protocol.CommandFailed, err.Error()
+		}
+		return res
 	case protocol.CmdRunScript:
 		var p protocol.ScriptPayload
 		if err := json.Unmarshal(c.Payload, &p); err != nil {

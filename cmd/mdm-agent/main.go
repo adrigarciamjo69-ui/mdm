@@ -33,6 +33,7 @@ import (
 	"mdm/internal/agent/policy"
 	"mdm/internal/agent/service"
 	"mdm/internal/agent/settings"
+	"mdm/internal/agent/tempadmin"
 	"mdm/internal/agent/update"
 	"mdm/internal/protocol"
 )
@@ -352,8 +353,18 @@ func cmdRun(d deps) int {
 		},
 		Log: logger,
 	})
+	var tempOS tempadmin.OS = &tempadmin.Linux{Run: tempadmin.ExecRunner, Root: "/"}
+	if runtime.GOOS == "windows" {
+		tempOS = &tempadmin.Windows{Run: tempadmin.ExecRunner}
+	}
+	tempAdmins, err := tempadmin.New(tempadmin.Deps{OS: tempOS, StatePath: filepath.Join(d.configDir, "tempadmin.json"), Log: logger})
+	if err != nil {
+		fmt.Fprintln(d.stderr, "Error:", err)
+		return 1
+	}
 	runner, err := commands.New(commands.Deps{
 		API:               api,
+		TempAdmin:         tempAdmins,
 		Exec:              agentexec.Run,
 		Power:             commands.Power,
 		RefreshInventory:  func() { forceInventory.Store(true) },
@@ -363,6 +374,12 @@ func cmdRun(d deps) int {
 		// Retirar: primero se borra la configuración (la credencial) y luego se
 		// quita el servicio, que detiene este mismo proceso.
 		Retire: func() error {
+			// Sin agente nadie quitaría los permisos temporales: se quitan ya.
+			// Si alguno no se puede quitar, el agente no se desinstala y lo
+			// sigue intentando él solo al caducar.
+			if _, err := tempAdmins.Revoke(context.Background(), ""); err != nil && len(tempAdmins.Active()) > 0 {
+				return fmt.Errorf("no se desinstala: queda un administrador temporal sin retirar: %w", err)
+			}
 			if err := config.Remove(d.configDir); err != nil {
 				return err
 			}
@@ -378,6 +395,7 @@ func cmdRun(d deps) int {
 	}
 	err = d.runService(func(ctx context.Context) error {
 		go runner.Run(ctx)
+		go tempAdmins.Run(ctx)
 		go engine.Run(ctx)
 		go appsManager.Run(ctx)
 		go patchManager.Run(ctx)
@@ -431,7 +449,7 @@ func cmdSelftest(d deps) int {
 
 // capabilities son las funciones que declara esta versión del agente.
 func capabilities() []string {
-	caps := []string{protocol.CapPolicy, protocol.CapCommands, protocol.CapScripts, protocol.CapSelfUpdate, protocol.CapApps, protocol.CapPatches}
+	caps := []string{protocol.CapPolicy, protocol.CapCommands, protocol.CapScripts, protocol.CapSelfUpdate, protocol.CapApps, protocol.CapPatches, protocol.CapTempAdmin}
 	if runtime.GOOS == "windows" {
 		caps = append(caps, protocol.CapBitLocker)
 	}

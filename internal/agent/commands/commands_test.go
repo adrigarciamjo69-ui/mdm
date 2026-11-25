@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"mdm/internal/agent/exec"
+	"mdm/internal/agent/tempadmin"
 	"mdm/internal/protocol"
 )
 
@@ -336,5 +338,66 @@ func TestRunner_PatchCommands(t *testing.T) {
 	fin := h.waitFinished(t, 2)
 	if fin[0].res.Status != "succeeded" || fmt.Sprint(calls) != "[scan install]" {
 		t.Fatalf("%v %+v", calls, fin)
+	}
+}
+
+type fakeTempAdmin struct {
+	granted []string
+	revoked []string
+}
+
+func (f *fakeTempAdmin) Grant(_ context.Context, user string, d time.Duration, reason string) (tempadmin.Grant, error) {
+	if user == "jefe" {
+		return tempadmin.Grant{}, errors.New("jefe ya es administrador de este equipo de forma permanente: no se cambia nada.")
+	}
+	if user == "" {
+		user = `EMPRESA\ana`
+	}
+	f.granted = append(f.granted, fmt.Sprintf("%s %v %s", user, d, reason))
+	return tempadmin.Grant{User: user, ExpiresAt: time.Date(2026, 11, 16, 13, 0, 0, 0, time.Local)}, nil
+}
+
+func (f *fakeTempAdmin) Revoke(_ context.Context, user string) ([]string, error) {
+	f.revoked = append(f.revoked, user)
+	return []string{`EMPRESA\ana`}, nil
+}
+
+func TestRunner_TempAdmin(t *testing.T) {
+	h := newHarness(t)
+	ta := &fakeTempAdmin{}
+	h.runner.d.TempAdmin = ta
+	h.start()
+	defer h.stop()
+	h.runner.Submit([]protocol.Command{
+		cmd("t1", protocol.CmdTempAdmin, protocol.TempAdminPayload{Minutes: 60, Reason: "Driver"}),
+		cmd("t2", protocol.CmdTempAdmin, protocol.TempAdminPayload{User: "jefe", Minutes: 60, Reason: "x"}),
+		cmd("t3", protocol.CmdTempAdminRevoke, protocol.TempAdminRevokePayload{}),
+		cmd("t4", protocol.CmdTempAdmin, protocol.TempAdminPayload{Minutes: 5, Reason: "x"}),
+	})
+	fin := h.waitFinished(t, 4)
+	if fin[0].res.Status != "succeeded" || !strings.Contains(fin[0].res.Stdout, `EMPRESA\ana`) || !strings.Contains(fin[0].res.Stdout, "13:00") {
+		t.Fatalf("conceder: %+v", fin[0].res)
+	}
+	if fmt.Sprint(ta.granted) != `[EMPRESA\ana 1h0m0s Driver]` {
+		t.Fatalf("llamadas: %v", ta.granted)
+	}
+	if fin[1].res.Status != "failed" || !strings.Contains(fin[1].res.Error, "permanente") {
+		t.Fatalf("permanente: %+v", fin[1].res)
+	}
+	if fin[2].res.Status != "succeeded" || !strings.Contains(fin[2].res.Stdout, `EMPRESA\ana`) {
+		t.Fatalf("retirar: %+v", fin[2].res)
+	}
+	if fin[3].res.Status != "failed" {
+		t.Fatalf("duración fuera de rango: %+v", fin[3].res)
+	}
+}
+
+func TestRunner_TempAdminUnsupported(t *testing.T) {
+	h := newHarness(t)
+	h.start()
+	defer h.stop()
+	h.runner.Submit([]protocol.Command{cmd("t1", protocol.CmdTempAdmin, protocol.TempAdminPayload{Minutes: 60, Reason: "x"})})
+	if fin := h.waitFinished(t, 1); fin[0].res.Status != "failed" {
+		t.Fatalf("%+v", fin[0].res)
 	}
 }
