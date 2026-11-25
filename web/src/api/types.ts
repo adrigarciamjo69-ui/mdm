@@ -214,6 +214,8 @@ export interface CatalogField {
   min?: number;
   max?: number;
   options?: string[];
+  /** Texto de cada opción de un enum. */
+  option_labels?: Record<string, string>;
   max_len?: number;
   description?: string;
 }

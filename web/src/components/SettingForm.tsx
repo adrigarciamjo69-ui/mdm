@@ -49,7 +49,7 @@ function FieldInput({ f, value, onChange, error, disabled }: { f: CatalogField; 
       input = (
         <select {...common} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)}>
           <option value="">Elige…</option>
-          {f.options?.map((o) => <option key={o} value={o}>{o}</option>)}
+          {f.options?.map((o) => <option key={o} value={o}>{f.option_labels?.[o] ?? o}</option>)}
         </select>
       );
       break;
@@ -78,6 +78,7 @@ function FieldInput({ f, value, onChange, error, disabled }: { f: CatalogField; 
     <div className="field">
       <label htmlFor={id}>{f.label}{f.type === "string_list" && <span className="hint"> uno por línea</span>}</label>
       {input}
+      {f.description && <span className="hint small">{f.description}</span>}
       {error && <span className="field-error">{error}</span>}
     </div>
   );

@@ -5,7 +5,7 @@ import { COMMAND_LABEL, type CommandType } from "../lib/commands";
 import RunDialog, { type RunTarget } from "./RunDialog";
 
 const OPERATOR: CommandType[] = ["reboot", "shutdown", "refresh_inventory", "evaluate_policies"];
-const ADMIN: CommandType[] = ["run_script", "retire"];
+const ADMIN: CommandType[] = ["run_script", "temp_admin", "temp_admin_revoke", "retire"];
 const ANDROID_OPERATOR: CommandType[] = ["lock", "reboot", "lost_mode_start", "lost_mode_stop"];
 const ANDROID_ADMIN: CommandType[] = ["reset_password", "wipe"];
 const DANGER: CommandType[] = ["retire", "wipe"];

@@ -97,3 +97,28 @@ it("con un solo equipo, retirar exige escribir su nombre", async () => {
   await user.type(screen.getByRole("textbox"), "PC-CONTA-04");
   expect(btn).toBeEnabled();
 });
+
+describe("RunDialog · administrador temporal", () => {
+  it("administrador temporal envía usuario, duración y motivo, y exige el motivo", async () => {
+    const calls = renderDialog("temp_admin");
+    const user = userEvent.setup();
+    const btn = await screen.findByRole("button", { name: "Dar permiso" });
+    expect(btn).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText("Duración"), "120");
+    await user.type(screen.getByLabelText(/Usuario/), "EMPRESA\\ana");
+    await user.type(screen.getByLabelText("Motivo"), "Instalar el driver");
+    await user.click(btn);
+    await waitFor(() => expect(calls.find((c) => c.path === "/batches")?.body).toEqual({
+      type: "temp_admin", device_ids: ["d1", "d2", "d3"], params: { user: "EMPRESA\\ana", minutes: 120, reason: "Instalar el driver" },
+    }));
+  });
+
+  it("retirar el administrador temporal sin usuario los quita todos", async () => {
+    const calls = renderDialog("temp_admin_revoke");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Quitar permiso" }));
+    await waitFor(() => expect(calls.find((c) => c.path === "/batches")?.body).toEqual({
+      type: "temp_admin_revoke", device_ids: ["d1", "d2", "d3"], params: { user: "" },
+    }));
+  });
+});

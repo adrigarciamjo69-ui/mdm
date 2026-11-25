@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiError } from "../api/client";
-import { COMMAND_LABEL, type CommandType } from "../lib/commands";
+import { COMMAND_LABEL, formatMinutes, type CommandType } from "../lib/commands";
 
 interface Script {
   id: string;
@@ -25,13 +25,16 @@ interface Props {
   target: RunTarget;
   onClose(): void;
   onDone(batchId: string): void;
+  /** Usuario ya escrito (quitar el administrador temporal de alguien). */
+  presetUser?: string;
 }
 
 const DELAYS: [number, string][] = [[0, "Ahora"], [60, "1 minuto"], [300, "5 minutos"], [900, "15 minutos"], [1800, "30 minutos"], [3600, "1 hora"]];
-const BUTTON: Record<CommandType, string> = { ...COMMAND_LABEL, run_script: "Ejecutar" };
+const BUTTON: Record<CommandType, string> = { ...COMMAND_LABEL, run_script: "Ejecutar", temp_admin: "Dar permiso", temp_admin_revoke: "Quitar permiso" };
+const DURATIONS = [15, 30, 60, 120, 240, 480];
 
 /** Diálogo para lanzar una orden sobre varios equipos o un grupo. */
-export default function RunDialog({ type, target, onClose, onDone }: Props) {
+export default function RunDialog({ type, target, onClose, onDone, presetUser }: Props) {
   const titleId = useId();
   const [delay, setDelay] = useState(0);
   const [message, setMessage] = useState("");
@@ -43,6 +46,9 @@ export default function RunDialog({ type, target, onClose, onDone }: Props) {
   const [lostMessage, setLostMessage] = useState("");
   const [lostPhone, setLostPhone] = useState("");
   const [wipeExternal, setWipeExternal] = useState(false);
+  const [taUser, setTaUser] = useState(presetUser ?? "");
+  const [taMinutes, setTaMinutes] = useState(60);
+  const [taReason, setTaReason] = useState("");
   const android = target.platform === "android";
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -60,7 +66,8 @@ export default function RunDialog({ type, target, onClose, onDone }: Props) {
   // Varios equipos: se escribe cuántos; uno solo (o un grupo): su nombre.
   const confirmText = count !== undefined && count > 1 ? String(count) : target.label;
   const confirmed = (type !== "retire" && type !== "wipe") || typed.trim() === confirmText;
-  const ready = confirmed && (type !== "reset_password" || password.length >= 4) && (type !== "lost_mode_start" || lostMessage.trim() !== "");
+  const ready = confirmed && (type !== "reset_password" || password.length >= 4) && (type !== "lost_mode_start" || lostMessage.trim() !== "")
+    && (type !== "temp_admin" || taReason.trim().length >= 3);
 
   const delayText = DELAYS.find(([s]) => s === delay)?.[1].toLowerCase() ?? "";
   const summary: Record<CommandType, string> = {
@@ -75,6 +82,8 @@ export default function RunDialog({ type, target, onClose, onDone }: Props) {
     lost_mode_start: `La pantalla mostrará tu mensaje y solo permitirá llamar al teléfono indicado: ${target.label}.`,
     lost_mode_stop: `Se saldrá del modo perdido: ${target.label}.`,
     wipe: `Se restablecerá de fábrica y dejará de estar gestionado: ${target.label}. Se perderán todos sus datos.`,
+    temp_admin: `El usuario será administrador local durante ${formatMinutes(taMinutes)} en ${target.label}. El agente le quitará el permiso solo al terminar, aunque el equipo no tenga red.`,
+    temp_admin_revoke: `Se quitará ya el permiso de administrador temporal en ${target.label}.`,
   };
 
   async function submit() {
@@ -86,6 +95,8 @@ export default function RunDialog({ type, target, onClose, onDone }: Props) {
     if (type === "reset_password") body.params = { new_password: password };
     if (type === "lost_mode_start") body.params = { message: lostMessage.trim(), phone: lostPhone.trim() };
     if (type === "wipe") body.params = { wipe_external_storage: wipeExternal };
+    if (type === "temp_admin") body.params = { user: taUser.trim(), minutes: taMinutes, reason: taReason.trim() };
+    if (type === "temp_admin_revoke") body.params = { user: taUser.trim() };
     if (type === "run_script") {
       if (!script) {
         setError("Elige un script.");
@@ -182,6 +193,27 @@ export default function RunDialog({ type, target, onClose, onDone }: Props) {
                 <input aria-label={p.name} value={params[p.name] ?? ""} placeholder={p.default} onChange={(e) => setParams({ ...params, [p.name]: e.target.value })} />
               </label>
             ))}
+          </>
+        )}
+        {(type === "temp_admin" || type === "temp_admin_revoke") && (
+          <label className="field">
+            <span>Usuario <span className="hint">{type === "temp_admin" ? "vacío: el que tenga la sesión iniciada · EMPRESA\\usuario" : "vacío: todos los permisos temporales"}</span></span>
+            <input value={taUser} onChange={(e) => setTaUser(e.target.value)} maxLength={104} autoComplete="off" />
+          </label>
+        )}
+        {type === "temp_admin" && (
+          <>
+            <label className="field">
+              <span>Duración</span>
+              <select value={taMinutes} onChange={(e) => setTaMinutes(Number(e.target.value))}>
+                {DURATIONS.map((m) => <option key={m} value={m}>{formatMinutes(m)}</option>)}
+              </select>
+            </label>
+            <label className="field">
+              <span>Motivo</span>
+              <input value={taReason} onChange={(e) => setTaReason(e.target.value)} maxLength={500} placeholder="Instalar el driver de la impresora" />
+            </label>
+            <p className="muted small">Queda en la auditoría. En Windows, el usuario eleva con su propia contraseña en «Ejecutar como administrador»; para una sesión completa de administrador debe cerrar sesión y volver a entrar.</p>
           </>
         )}
         {(type === "retire" || type === "wipe") && (

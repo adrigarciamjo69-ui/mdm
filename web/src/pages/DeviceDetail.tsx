@@ -9,6 +9,7 @@ import ComplianceTab from "../components/ComplianceTab";
 import ManagedSoftwareTab from "../components/ManagedSoftwareTab";
 import UpdatesTab from "../components/UpdatesTab";
 import ActionBar from "../components/ActionBar";
+import TempAdminBanner from "../components/TempAdminBanner";
 import DeviceCommands from "../components/DeviceCommands";
 import ConfirmDialog from "../components/ConfirmDialog";
 import Pagination from "../components/Pagination";
@@ -112,6 +113,7 @@ export default function DeviceDetail() {
         </p>
       )}
 
+      {d.status !== "revoked" && d.platform !== "android" && <TempAdminBanner deviceId={d.id} hostname={d.hostname} />}
       {d.status !== "revoked" && <ActionBar target={{ deviceIds: [d.id], label: d.hostname, platform: d.platform }} label="" >{null}</ActionBar>}
       {can("admin") && (
         <div className="page-actions" style={{ marginBottom: "1.25rem" }}>
