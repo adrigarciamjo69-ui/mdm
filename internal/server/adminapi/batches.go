@@ -26,6 +26,7 @@ var commandRoles = map[string]auth.Role{
 	protocol.CmdScanUpdates: auth.RoleOperator, protocol.CmdInstallUpdatesNow: auth.RoleOperator,
 	protocol.CmdLock: auth.RoleOperator, protocol.CmdLostModeStart: auth.RoleOperator, protocol.CmdLostModeStop: auth.RoleOperator,
 	protocol.CmdResetPassword: auth.RoleAdmin, protocol.CmdWipe: auth.RoleAdmin,
+	protocol.CmdTempAdmin: auth.RoleAdmin, protocol.CmdTempAdminRevoke: auth.RoleAdmin,
 }
 
 type commandJSON struct {
@@ -111,6 +112,24 @@ var buildPayload = func(a *api, r *http.Request, typ string, params json.RawMess
 		out = append(out, skippedJSON(s))
 	}
 	return payload, keep, out, err
+}
+
+// tempAdminDeliveryWindow es el plazo para que el equipo recoja la orden.
+const tempAdminDeliveryWindow = 4 * time.Hour
+
+// batchAuditDetails resume el lote para la auditoría. El administrador
+// temporal guarda además a quién, cuánto tiempo y por qué.
+func batchAuditDetails(typ string, payload json.RawMessage, devices int, target string) map[string]any {
+	d := map[string]any{"type": typ, "devices": devices, "target": target}
+	if typ == protocol.CmdTempAdmin || typ == protocol.CmdTempAdminRevoke {
+		var p map[string]any
+		if json.Unmarshal(payload, &p) == nil {
+			for k, v := range p {
+				d[k] = v
+			}
+		}
+	}
+	return d
 }
 
 func (a *api) createBatch(w http.ResponseWriter, r *http.Request) {
@@ -227,8 +246,13 @@ func (a *api) createBatch(w http.ResponseWriter, r *http.Request) {
 	for i, t := range active {
 		ids[i] = t.ID
 	}
+	var expiresIn time.Duration // la predeterminada
+	if in.Type == protocol.CmdTempAdmin {
+		// Un permiso que se pide para ahora no debe llegar días después.
+		expiresIn = tempAdminDeliveryWindow
+	}
 	b, err := a.d.Store.CreateBatch(r.Context(), store.NewBatch{Type: in.Type, Params: payload, CreatedBy: admin.ID,
-		CreatedByEmail: admin.Email, TargetDescription: description, At: a.d.Now().UTC()}, ids)
+		CreatedByEmail: admin.Email, TargetDescription: description, At: a.d.Now().UTC(), ExpiresIn: expiresIn}, ids)
 	if errors.Is(err, store.ErrBadReference) {
 		badRequest(w, "Algún equipo indicado ya no existe.")
 		return
@@ -238,7 +262,7 @@ func (a *api) createBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.d.Audit.Log(r.Context(), audit.Entry{Actor: &admin, Action: audit.BatchCreated, TargetType: "batch", TargetID: b.ID.String(),
-		Details: map[string]any{"type": in.Type, "devices": len(ids), "target": description}, IP: a.ip(r)})
+		Details: batchAuditDetails(in.Type, payload, len(ids), description), IP: a.ip(r)})
 
 	full, err := a.d.Store.GetBatch(r.Context(), b.ID)
 	if err != nil {

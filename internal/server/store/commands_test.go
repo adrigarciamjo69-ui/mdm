@@ -221,3 +221,16 @@ func TestCreateBatch_Limit(t *testing.T) {
 		t.Fatalf("1.001 equipos: %v", err)
 	}
 }
+
+func TestNextCommands_TempAdminNeedsCapability(t *testing.T) {
+	s := storetest.New(t)
+	d := enrollOne(t, s, "hw-ta")
+	batch(t, s, protocol.CmdTempAdmin, protocol.TempAdminPayload{User: "ana", Minutes: 60, Reason: "Soporte"}, t0, d)
+	if cmds, _ := s.NextCommands(ctx, d, allCaps, t0, 10); len(cmds) != 0 {
+		t.Fatalf("un agente sin tempadmin.v1 no la recibe: %+v", cmds)
+	}
+	cmds, _ := s.NextCommands(ctx, d, append(allCaps, protocol.CapTempAdmin), t0, 10)
+	if len(cmds) != 1 || cmds[0].Type != protocol.CmdTempAdmin {
+		t.Fatalf("con la capacidad sí: %+v", cmds)
+	}
+}

@@ -13,6 +13,9 @@ const (
 	// Fase 3.
 	CmdScanUpdates       = "scan_updates"
 	CmdInstallUpdatesNow = "install_updates_now"
+	// Administrador temporal: el agente da y quita el permiso él mismo.
+	CmdTempAdmin       = "temp_admin"
+	CmdTempAdminRevoke = "temp_admin_revoke"
 	// Android (los ejecuta Google, no el agente).
 	CmdLock          = "lock"
 	CmdResetPassword = "reset_password"
@@ -44,6 +47,7 @@ const (
 	CapSelfUpdate = "selfupdate.v1"
 	CapApps       = "apps.v1"
 	CapPatches    = "patches.v1"
+	CapTempAdmin  = "tempadmin.v1"
 )
 
 // RequiredCapability devuelve la capacidad que necesita el agente para ejecutar el tipo de orden.
@@ -53,6 +57,8 @@ func RequiredCapability(cmdType string) string {
 		return CapScripts
 	case CmdScanUpdates, CmdInstallUpdatesNow:
 		return CapPatches
+	case CmdTempAdmin, CmdTempAdminRevoke:
+		return CapTempAdmin
 	}
 	return CapCommands
 }
@@ -69,6 +75,26 @@ type ScriptPayload struct {
 	Env         map[string]string `json:"env"`
 	ScriptName  string            `json:"script_name"`
 	Version     int               `json:"version"`
+}
+
+// Límites del administrador temporal.
+const (
+	TempAdminMinMinutes = 15
+	TempAdminMaxMinutes = 480
+)
+
+// TempAdminPayload da permisos de administrador local durante unos minutos.
+// User vacío es el usuario con la sesión iniciada.
+type TempAdminPayload struct {
+	User    string `json:"user"`
+	Minutes int    `json:"minutes"`
+	Reason  string `json:"reason"`
+}
+
+// TempAdminRevokePayload quita el permiso antes de tiempo. User vacío quita
+// todos los permisos temporales del equipo.
+type TempAdminRevokePayload struct {
+	User string `json:"user"`
 }
 
 type CommandResult struct {

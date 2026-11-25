@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -113,6 +114,41 @@ func Build(ctx context.Context, st *store.Store, box *secrets.Box, typ string, p
 		}
 		b, _ := json.Marshal(p)
 		return b, targets, nil, nil
+	case protocol.CmdTempAdmin:
+		var p protocol.TempAdminPayload
+		dec := json.NewDecoder(bytes.NewReader(params))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&p); err != nil {
+			return nil, nil, nil, errors.New("Los parámetros deben ser user, minutes y reason.")
+		}
+		if p.Minutes < protocol.TempAdminMinMinutes || p.Minutes > protocol.TempAdminMaxMinutes {
+			return nil, nil, nil, errors.New("La duración debe estar entre 15 minutos y 8 horas.")
+		}
+		p.Reason = store.CleanString(p.Reason)
+		if n := utf8.RuneCountInString(p.Reason); n < 3 || n > 500 {
+			return nil, nil, nil, errors.New("Indica el motivo (entre 3 y 500 caracteres): queda en la auditoría.")
+		}
+		var err error
+		if p.User, err = cleanAccount(p.User); err != nil {
+			return nil, nil, nil, err
+		}
+		b, _ := json.Marshal(p)
+		return b, targets, nil, nil
+	case protocol.CmdTempAdminRevoke:
+		var p protocol.TempAdminRevokePayload
+		if !empty {
+			dec := json.NewDecoder(bytes.NewReader(params))
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(&p); err != nil {
+				return nil, nil, nil, errors.New("El único parámetro es user.")
+			}
+		}
+		var err error
+		if p.User, err = cleanAccount(p.User); err != nil {
+			return nil, nil, nil, err
+		}
+		b, _ := json.Marshal(p)
+		return b, targets, nil, nil
 	case protocol.CmdRefreshInventory, protocol.CmdEvaluatePolicies, protocol.CmdRetire, protocol.CmdScanUpdates, protocol.CmdInstallUpdatesNow:
 		if !empty {
 			return nil, nil, nil, errors.New("Esta orden no admite parámetros.")
@@ -120,6 +156,21 @@ func Build(ctx context.Context, st *store.Store, box *secrets.Box, typ string, p
 		return json.RawMessage(`{}`), targets, nil, nil
 	}
 	return nil, nil, nil, errors.New("Tipo de orden no admitido.")
+}
+
+// accountRe admite cuentas locales, de dominio (EMPRESA\usuario) y de Entra
+// (AzureAD\usuario@empresa.es). Nada de comillas ni separadores de órdenes.
+var accountRe = regexp.MustCompile(`^[\p{L}\p{N}._@\\ -]{1,104}$`)
+
+func cleanAccount(user string) (string, error) {
+	user = strings.TrimSpace(user)
+	if user == "" {
+		return "", nil
+	}
+	if !accountRe.MatchString(user) || strings.HasPrefix(user, "-") {
+		return "", errors.New("El usuario solo puede tener letras, números, espacios y . _ @ - \\.")
+	}
+	return user, nil
 }
 
 func scriptPayload(ctx context.Context, st *store.Store, params json.RawMessage, targets []store.DeviceRow) (json.RawMessage, []store.DeviceRow, []Skipped, error) {

@@ -133,7 +133,7 @@ func (s *Store) CreateBatch(ctx context.Context, b NewBatch, deviceIDs []uuid.UU
 
 // requiredCapsSQL calcula la capacidad necesaria para cada tipo de orden; debe
 // coincidir con protocol.RequiredCapability.
-const requiredCapsSQL = `CASE WHEN type = 'run_script' THEN 'scripts.v1' ELSE 'commands.v1' END`
+const requiredCapsSQL = `CASE WHEN type = 'run_script' THEN 'scripts.v1' WHEN type IN ('temp_admin', 'temp_admin_revoke') THEN 'tempadmin.v1' ELSE 'commands.v1' END`
 
 // NextCommands devuelve las órdenes que el agente puede ejecutar, de más
 // antigua a más reciente, y marca como enviadas las pendientes. Las enviadas

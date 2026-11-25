@@ -145,3 +145,64 @@ func TestBatches_Audit(t *testing.T) {
 	_ = time.Now
 	_ = fmt.Sprint
 }
+
+func TestBatches_TempAdmin(t *testing.T) {
+	a := newTestAPI(t)
+	id := a.seedDevice(seed{}).String()
+	ids := []string{id}
+	op, admin := a.loginAs(auth.RoleOperator), a.loginAs(auth.RoleAdmin)
+	good := map[string]any{"user": `EMPRESA\ana.lopez`, "minutes": 60, "reason": "Instalar el driver de la impresora"}
+	wantError(t, op.do("POST", "/batches", map[string]any{"type": "temp_admin", "device_ids": ids, "params": good}), 403, "forbidden")
+	wantError(t, op.do("POST", "/batches", map[string]any{"type": "temp_admin_revoke", "device_ids": ids}), 403, "forbidden")
+	for _, p := range []map[string]any{
+		{"user": "ana", "minutes": 10, "reason": "Instalar"},
+		{"user": "ana", "minutes": 481, "reason": "Instalar"},
+		{"user": "ana", "minutes": 60, "reason": ""},
+		{"user": "ana", "minutes": 60, "reason": strings.Repeat("x", 501)},
+		{"user": "ana\" & net user x /add", "minutes": 60, "reason": "Instalar"},
+		{"user": "ana", "minutes": 60, "reason": "Instalar", "extra": true},
+	} {
+		wantError(t, admin.do("POST", "/batches", map[string]any{"type": "temp_admin", "device_ids": ids, "params": p}), 400, "invalid_request")
+	}
+	wantStatus(t, admin.do("POST", "/batches", map[string]any{"type": "temp_admin", "device_ids": ids, "params": good}), 201)
+	// Sin usuario: el que tenga la sesión iniciada.
+	wantStatus(t, admin.do("POST", "/batches", map[string]any{"type": "temp_admin", "device_ids": ids,
+		"params": map[string]any{"minutes": 15, "reason": "Soporte"}}), 201)
+	wantStatus(t, admin.do("POST", "/batches", map[string]any{"type": "temp_admin_revoke", "device_ids": ids}), 201)
+	wantStatus(t, admin.do("POST", "/batches", map[string]any{"type": "temp_admin_revoke", "device_ids": ids,
+		"params": map[string]any{"user": "ana"}}), 201)
+
+	e := a.findAudit("batch.created")
+	if e == nil {
+		t.Fatal("sin auditoría")
+	}
+	var found bool
+	for _, e := range a.auditEntries() {
+		d := string(e.Details)
+		if e.Action == "batch.created" && strings.Contains(d, "Instalar el driver de la impresora") && strings.Contains(d, `"minutes": 60`) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("la auditoría debe guardar el usuario, los minutos y el motivo")
+	}
+}
+
+func TestTempAdmin_NeedsCapability(t *testing.T) {
+	if protocol.RequiredCapability(protocol.CmdTempAdmin) != protocol.CapTempAdmin ||
+		protocol.RequiredCapability(protocol.CmdTempAdminRevoke) != protocol.CapTempAdmin {
+		t.Fatal("capacidad del administrador temporal")
+	}
+}
+
+func TestBatches_TempAdminExpiresSoon(t *testing.T) {
+	a := newTestAPI(t)
+	id := a.seedDevice(seed{}).String()
+	wantStatus(t, a.loginAs(auth.RoleAdmin).do("POST", "/batches", map[string]any{"type": "temp_admin", "device_ids": []string{id},
+		"params": map[string]any{"minutes": 60, "reason": "Soporte"}}), 201)
+	var created, expires time.Time
+	_ = a.store.Pool().QueryRow(ctx, `SELECT created_at, expires_at FROM commands`).Scan(&created, &expires)
+	if expires.Sub(created) != 4*time.Hour {
+		t.Fatalf("un permiso pedido ahora no debe llegar días después: caduca en %s", expires.Sub(created))
+	}
+}
