@@ -44,6 +44,11 @@ describe("MergeDialog", () => {
     expect(body.notes_both).toBe(true);
   });
 
+  it("un número de serie de relleno del agente no gana al real", () => {
+    renderDialog({ ...manual, serial: "MP100251222K00270" }, { ...agent, serial: "Default string" });
+    expect(screen.getByRole("radio", { name: "Número de serie: MP100251222K00270" })).toBeChecked();
+  });
+
   it("dos equipos con agente no se pueden fusionar", () => {
     renderDialog(agent, { ...agent, id: "g2", device_id: "d2", name: "PC-ANA-02" });
     expect(screen.getByText(/dos equipos con agente/i)).toBeInTheDocument();

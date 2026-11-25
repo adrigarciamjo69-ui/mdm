@@ -174,7 +174,7 @@ input, select, textarea {
   padding: 0.45rem 0.6rem; min-height: 2.25rem; width: 100%;
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
-input[type="checkbox"] { width: auto; min-height: 0; }
+input[type="checkbox"], input[type="radio"] { width: auto; min-height: 0; flex: none; }
 
 .form-error {
   margin: 0 0 1rem; padding: 0.6rem 0.75rem; border-radius: var(--radius);
@@ -369,7 +369,17 @@ table.loading tbody { opacity: 0.5; }
 .confirm {
   width: min(32rem, 100%); padding: 1.5rem; border: 1px solid var(--line-strong);
   border-radius: 10px; background: var(--surface); color: var(--ink);
+  /* Un diálogo largo se desplaza dentro de la pantalla. */
+  max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); overflow-y: auto; overscroll-behavior: contain;
 }
+.confirm .dialog-actions {
+  position: sticky; bottom: -1.5rem; margin: 1.25rem -1.5rem -1.5rem; padding: 0.75rem 1.5rem;
+  background: var(--surface); border-top: 1px solid var(--line);
+}
+.merge-table td, .merge-table th { vertical-align: top; }
+.merge-table .check-field { margin: 0; align-items: flex-start; }
+.merge-table .check-field input { margin-top: 0.2rem; }
+.merge-table td { width: 40%; overflow-wrap: anywhere; }
 .confirm h2 { margin-bottom: 0.75rem; }
 .confirm > p { margin-bottom: 1rem; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; }

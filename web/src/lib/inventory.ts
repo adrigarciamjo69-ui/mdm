@@ -48,3 +48,13 @@ export const ISSUE_LABELS: Record<string, string> = {
   unencrypted: "Sin cifrar",
   stale: "Sin conexión reciente",
 };
+
+// Igual que store.SerialKey en el servidor: números de serie de relleno que
+// no identifican a un equipo.
+const JUNK_SERIALS = new Set(["TO BE FILLED BY O.E.M.", "DEFAULT STRING", "SYSTEM SERIAL NUMBER", "CHASSIS SERIAL NUMBER", "NOT SPECIFIED",
+  "NONE", "N/A", "0123456789", "NOT APPLICABLE", "INVALID", "UNKNOWN"]);
+
+export function isJunkSerial(serial: string): boolean {
+  const k = serial.trim().toUpperCase();
+  return k.length < 4 || JUNK_SERIALS.has(k) || k.startsWith("VMWARE-") || k.includes("PARALLELS") || [...k].every((c) => c === k[0]);
+}

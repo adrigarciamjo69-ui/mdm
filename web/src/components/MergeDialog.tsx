@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api/client";
 import type { Asset } from "../api/types";
-import { ASSET_STATUS_LABEL, formatPrice } from "../lib/inventory";
+import { ASSET_STATUS_LABEL, formatPrice, isJunkSerial } from "../lib/inventory";
 
 type Field = "category" | "name" | "brand" | "model" | "serial" | "asset_tag" | "status" | "owner" | "department" | "location"
   | "price" | "purchase_date" | "warranty_until" | "purchase_order" | "supplier" | "notes";
@@ -26,10 +26,17 @@ const FIELDS: [Field, string, (a: Asset) => string][] = [
   ["notes", "Notas", (a) => a.notes],
 ];
 
-/** Por defecto, el valor del conservado; si lo tiene vacío, el del otro. */
+/**
+ * Por defecto, el valor del conservado; si lo tiene vacío (o es un número de
+ * serie de relleno como «Default string»), el del otro.
+ */
 function defaults(keep: Asset, other: Asset): Record<Field, "keep" | "other"> {
   const out = {} as Record<Field, "keep" | "other">;
-  for (const [f, , get] of FIELDS) out[f] = !get(keep) && get(other) ? "other" : "keep";
+  for (const [f, , get] of FIELDS) {
+    const k = get(keep), o = get(other);
+    const useless = !k || (f === "serial" && isJunkSerial(k) && !isJunkSerial(o));
+    out[f] = useless && o ? "other" : "keep";
+  }
   return out;
 }
 
@@ -85,15 +92,15 @@ export default function MergeDialog({ a, b, onClose, onDone }: { a: Asset; b: As
         <fieldset className="params">
           <legend>Ficha que se conserva</legend>
           {[a, b].map((x) => (
-            <label key={x.id} className="check-field">
+            <label key={x.id} className="check-field" style={{ marginBottom: "0.4rem" }}>
               <input type="radio" name="keep" checked={keepId === x.id} onChange={() => changeKeep(x.id)} disabled={bothAgents} />
               Conservar la ficha de «{x.name}»{x.device_id ? " (con agente)" : " (manual)"}
             </label>
           ))}
         </fieldset>
         <div className="table-wrap">
-          <table>
-            <thead><tr><th scope="col">Campo</th><th scope="col">«{keep.name}»</th><th scope="col">«{other.name}»</th></tr></thead>
+          <table className="merge-table">
+            <thead><tr><th scope="col">Campo</th><th scope="col">«{keep.name}» {keep.device_id ? "(con agente)" : "(manual)"} · se conserva</th><th scope="col">«{other.name}» {other.device_id ? "(con agente)" : "(manual)"}</th></tr></thead>
             <tbody>
               {FIELDS.map(([f, label, get]) => {
                 const kv = get(keep), ov = get(other);
@@ -112,7 +119,8 @@ export default function MergeDialog({ a, b, onClose, onDone }: { a: Asset; b: As
                             <label className="check-field">
                               <input type="radio" name={`f-${f}`} aria-label={`${label}: ${show(v)}`} checked={choice[f] === side} disabled={disabled}
                                 onChange={() => setChoice({ ...choice, [f]: side })} />
-                              <span style={f === "notes" ? { whiteSpace: "pre-wrap" } : undefined}>{show(v)}</span>
+                              <span style={f === "notes" ? { whiteSpace: "pre-wrap" } : undefined}>{show(v)}
+                                {f === "serial" && v && isJunkSerial(v) && <span className="hint small"> (de relleno)</span>}</span>
                             </label>
                           </td>
                         );
