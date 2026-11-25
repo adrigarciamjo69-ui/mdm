@@ -45,7 +45,7 @@ export default function PersonPicker({ label, value, onChange, required }: {
           {results.data.items.length === 0 && <li className="muted small">Nadie coincide. ¿Está sincronizado Entra ID?</li>}
           {results.data.items.map((u) => (
             <li key={u.id} role="option" aria-selected={false}>
-              <button type="button" onClick={() => { onChange({ id: u.id, name: u.display_name, email: u.email }); setOpen(false); }}>
+              <button type="button" onClick={() => { onChange({ id: u.id, name: u.display_name, email: u.email, department: u.department }); setOpen(false); }}>
                 <strong>{u.display_name}</strong> <span className="muted small">{u.email}{u.department ? ` · ${u.department}` : ""}</span>
                 {u.status !== "active" && <span className="tag">baja</span>}
               </button>

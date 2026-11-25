@@ -99,7 +99,12 @@ export default function AssetForm({ asset, onSave, onCancel, saveLabel = "Guarda
         {text("serial", "Número de serie", { mono: true })}
         {text("asset_tag", "Etiqueta interna", { mono: true })}
         <PersonPicker label="Persona" value={owner} onChange={setOwner} />
-        {text("department", "Departamento")}
+        {owner?.department ? (
+          <label className="field">
+            <span>Departamento <span className="hint">el de la persona en Entra ID</span></span>
+            <input value={owner.department} disabled />
+          </label>
+        ) : text("department", "Departamento")}
         {text("location", "Ubicación")}
       </div>
       <fieldset className="params">

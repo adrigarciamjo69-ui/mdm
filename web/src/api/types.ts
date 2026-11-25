@@ -332,6 +332,8 @@ export interface PersonRef {
   id: string;
   name: string;
   email: string;
+  /** Departamento en Entra ID: si lo tiene, es el del activo. */
+  department?: string;
 }
 
 export interface Asset {

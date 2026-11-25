@@ -328,7 +328,9 @@ type AssetRow struct {
 	Asset
 	OwnerName  string
 	OwnerEmail string
-	Device     *DeviceRow
+	// OwnerDepartment es el departamento de la persona en Entra ID.
+	OwnerDepartment string
+	Device          *DeviceRow
 }
 
 var assetSorts = map[string]string{
@@ -414,7 +416,7 @@ func (s *Store) ListAssets(ctx context.Context, f AssetFilter) ([]AssetRow, int,
 	if strings.EqualFold(f.Order, "desc") {
 		dir = "DESC"
 	}
-	q := `SELECT ` + assetCols + `, COALESCE(u.display_name, ''), COALESCE(NULLIF(u.email, ''), u.upn, '')` + assetListFrom + where +
+	q := `SELECT ` + assetCols + `, COALESCE(u.display_name, ''), COALESCE(NULLIF(u.email, ''), u.upn, ''), COALESCE(u.department, '')` + assetListFrom + where +
 		fmt.Sprintf(" ORDER BY %s %s NULLS LAST, a.id", sortExpr, dir)
 	if !f.All {
 		page, perPage := normalizePage(f.Page, f.PerPage)
@@ -429,7 +431,7 @@ func (s *Store) ListAssets(ctx context.Context, f AssetFilter) ([]AssetRow, int,
 	var devIDs []uuid.UUID
 	for rows.Next() {
 		var r AssetRow
-		if err := rows.Scan(append(assetDest(&r.Asset), &r.OwnerName, &r.OwnerEmail)...); err != nil {
+		if err := rows.Scan(append(assetDest(&r.Asset), &r.OwnerName, &r.OwnerEmail, &r.OwnerDepartment)...); err != nil {
 			rows.Close()
 			return nil, 0, err
 		}

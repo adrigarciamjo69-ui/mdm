@@ -11,6 +11,10 @@ El MDM reúne en una sola consola los equipos con agente y el resto del material
 
 Datos de un activo: categoría, nombre, marca, modelo, número de serie, etiqueta interna, estado (en uso, en almacén, en reparación, baja), persona, departamento, ubicación, precio, fecha de compra, garantía, pedido, proveedor y notas.
 
+**Departamento:** si la persona viene de Entra ID y allí tiene departamento, el activo toma ese y no se edita a mano; cuando cambia en Entra, se actualiza en la siguiente sincronización. Sin persona, o si su ficha de Entra no tiene departamento, se escribe a mano. La **ubicación** es siempre manual y sirve para los activos que están en un sitio y no en manos de alguien.
+
+Los grupos dinámicos pueden usar el departamento de los equipos con agente (condición «Departamento (inventario)»), por ejemplo un grupo «Finanzas» y un subgrupo «Finanzas – Portátiles» con «grupo = Finanzas» y otra condición. Los activos manuales no entran en grupos: los grupos solo sirven para políticas, software y órdenes de equipos gestionados.
+
 ### Unión por número de serie
 
 Si das de alta a mano un portátil con su número de serie y después se inscribe con el agente, el equipo se une a esa ficha: se conservan precio, pedido, estado y persona, y el agente aporta los datos técnicos. No aparecen duplicados.

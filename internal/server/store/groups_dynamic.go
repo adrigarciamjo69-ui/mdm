@@ -22,7 +22,8 @@ const factsQuery = `
 SELECT d.id, d.platform, COALESCE(d.group_id::text, ''), d.os_name, d.os_version, d.agent_version, d.hostname,
        d.manufacturer, d.model, d.assigned_user, COALESCE(i.data->'system'->>'domain', ''), d.tags,
        d.last_seen_at, d.revoked_at, d.enrolled_at, COALESCE(c.state, 'unknown'),
-       ARRAY(SELECT s.name FROM device_software s WHERE s.device_id = d.id)
+       ARRAY(SELECT s.name FROM device_software s WHERE s.device_id = d.id),
+       COALESCE((SELECT a.department FROM assets a WHERE a.device_id = d.id AND a.deleted_at IS NULL), '')
 FROM devices d
 LEFT JOIN device_inventory i ON i.device_id = d.id
 LEFT JOIN device_compliance c ON c.device_id = d.id`
@@ -33,7 +34,7 @@ func scanFacts(row pgx.Row, now time.Time) (uuid.UUID, rules.Facts, error) {
 	var lastSeen, revoked *time.Time
 	var enrolled time.Time
 	err := row.Scan(&id, &f.Platform, &f.Group, &f.OSName, &f.OSVersion, &f.AgentVersion, &f.Hostname,
-		&f.Manufacturer, &f.Model, &f.AssignedUser, &f.Domain, &f.Tags, &lastSeen, &revoked, &enrolled, &f.Compliance, &f.Software)
+		&f.Manufacturer, &f.Model, &f.AssignedUser, &f.Domain, &f.Tags, &lastSeen, &revoked, &enrolled, &f.Compliance, &f.Software, &f.Department)
 	if err != nil {
 		return uuid.Nil, f, err
 	}

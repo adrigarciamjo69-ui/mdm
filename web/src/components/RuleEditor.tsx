@@ -35,6 +35,7 @@ const FIELDS: { key: string; label: string; kind: Kind; options?: [string, strin
   { key: "manufacturer", label: "Fabricante", kind: "text" },
   { key: "model", label: "Modelo", kind: "text" },
   { key: "assigned_user", label: "Usuario asignado", kind: "text" },
+  { key: "department", label: "Departamento (inventario)", kind: "text" },
   { key: "domain", label: "Dominio", kind: "text" },
   { key: "tag", label: "Etiqueta", kind: "tag" },
   { key: "software", label: "Programa", kind: "software" },

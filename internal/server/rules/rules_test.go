@@ -117,3 +117,13 @@ func TestValidate_ErrorNamesTheCondition(t *testing.T) {
 		t.Fatalf("el error debe indicar la condición 2: %v", err)
 	}
 }
+
+func TestDepartmentRule(t *testing.T) {
+	r := Rule{Match: "all", Conditions: []Condition{{Field: "department", Op: "eq", Value: json.RawMessage(`"finanzas"`)}}}
+	if err := Validate(r); err != nil {
+		t.Fatal(err)
+	}
+	if !Matches(r, Facts{Department: "Finanzas"}) || Matches(r, Facts{Department: "Compras"}) {
+		t.Fatal("departamento sin distinguir mayúsculas")
+	}
+}

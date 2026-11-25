@@ -97,6 +97,35 @@ func (s *Store) ApplyDirectorySync(ctx context.Context, users []DirectoryUser, a
 	if _, err := tx.Exec(ctx, `UPDATE directory_users SET deleted_at = $2 WHERE deleted_at IS NULL AND NOT (entra_id = ANY($1))`, ids, at); err != nil {
 		return err
 	}
+	// El departamento de los activos de cada persona sigue al de Entra ID, y
+	// sus equipos recalculan los grupos dinámicos.
+	rows, err := tx.Query(ctx, `UPDATE assets a SET department = u.department, updated_at = now()
+	    FROM directory_users u
+	    WHERE u.id = a.owner_id AND u.department <> '' AND a.department <> u.department AND a.deleted_at IS NULL
+	    RETURNING a.device_id`)
+	if err != nil {
+		return err
+	}
+	var changed []uuid.UUID
+	for rows.Next() {
+		var dev *uuid.UUID
+		if err := rows.Scan(&dev); err != nil {
+			rows.Close()
+			return err
+		}
+		if dev != nil {
+			changed = append(changed, *dev)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, d := range changed {
+		if err := EnqueueRecomputeDevice(ctx, tx, d, at); err != nil {
+			return err
+		}
+	}
 	// El correo de los equipos de cada persona sigue al del directorio.
 	if _, err := tx.Exec(ctx, `UPDATE devices d SET assigned_user = COALESCE(NULLIF(u.email, ''), u.upn)
 	    FROM assets a JOIN directory_users u ON u.id = a.owner_id

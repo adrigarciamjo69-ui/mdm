@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -14,13 +15,25 @@ import (
 
 func init() { afterAssetWrite = syncDeviceUser }
 
-// syncDeviceUser copia al equipo enlazado el correo del dueño del activo,
-// para que las reglas de grupos por usuario sigan funcionando.
+// syncDeviceUser mantiene lo que depende del dueño del activo: si es una
+// persona de Entra ID con departamento, el activo toma ese departamento; y el
+// equipo enlazado copia su correo y recalcula sus grupos dinámicos (las reglas
+// por usuario y por departamento).
 func syncDeviceUser(ctx context.Context, q querier, assetID uuid.UUID) error {
-	_, err := q.Exec(ctx, `UPDATE devices d SET assigned_user = COALESCE(NULLIF(u.email, ''), u.upn, '')
+	if _, err := q.Exec(ctx, `UPDATE assets a SET department = u.department
+	    FROM directory_users u WHERE a.id = $1 AND u.id = a.owner_id AND u.department <> '' AND a.department <> u.department`, assetID); err != nil {
+		return err
+	}
+	var deviceID *uuid.UUID
+	if err := q.QueryRow(ctx, `UPDATE devices d SET assigned_user = COALESCE(NULLIF(u.email, ''), u.upn, '')
 	    FROM assets a LEFT JOIN directory_users u ON u.id = a.owner_id
-	    WHERE a.id = $1 AND d.id = a.device_id`, assetID)
-	return err
+	    WHERE a.id = $1 AND d.id = a.device_id RETURNING d.id`, assetID).Scan(&deviceID); err != nil && err != pgx.ErrNoRows {
+		return err
+	}
+	if deviceID != nil {
+		return EnqueueRecomputeDevice(ctx, q, *deviceID, time.Now())
+	}
+	return nil
 }
 
 // categoryFor elige la categoría inicial de un equipo con agente.

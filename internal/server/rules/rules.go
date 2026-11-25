@@ -24,10 +24,12 @@ type Condition struct {
 type Facts struct {
 	Platform, Group, OSName, OSVersion, AgentVersion    string
 	Hostname, Manufacturer, Model, AssignedUser, Domain string
-	Compliance, Status                                  string
-	Tags                                                []string
-	Software                                            []string
-	LastSeenDays                                        int
+	// Department es el del activo del equipo en el inventario.
+	Department         string
+	Compliance, Status string
+	Tags               []string
+	Software           []string
+	LastSeenDays       int
 }
 
 const MaxConditions = 20
@@ -56,6 +58,7 @@ var fields = map[string]struct {
 	"manufacturer":   {kindText, []string{"eq", "ne", "contains", "starts_with"}, nil},
 	"model":          {kindText, []string{"eq", "ne", "contains", "starts_with"}, nil},
 	"assigned_user":  {kindText, []string{"eq", "ne", "contains", "starts_with"}, nil},
+	"department":     {kindText, []string{"eq", "ne", "contains", "starts_with"}, nil},
 	"domain":         {kindText, []string{"eq", "ne", "contains", "starts_with"}, nil},
 	"os_version":     {kindVersion, []string{"eq", "lt", "lte", "gt", "gte"}, nil},
 	"agent_version":  {kindVersion, []string{"eq", "lt", "lte", "gt", "gte"}, nil},
@@ -157,6 +160,8 @@ func (f Facts) text(field string) string {
 		return f.Model
 	case "assigned_user":
 		return f.AssignedUser
+	case "department":
+		return f.Department
 	case "domain":
 		return f.Domain
 	case "os_version":

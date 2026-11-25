@@ -56,7 +56,7 @@ Un equipo **cumple** si todos sus ajustes se cumplen o no aplican. Es **desconoc
 
 ## Grupos dinámicos
 
-Se definen con una regla de hasta 20 condiciones sobre plataforma, sistema y versión, nombre, fabricante, modelo, usuario, dominio, etiquetas, programas instalados, cumplimiento, estado o días sin conexión. Un equipo puede estar en varios grupos dinámicos, pero en un solo grupo manual (su grupo principal). La pertenencia se recalcula al cambiar el inventario o la ficha de un equipo, y cada hora.
+Se definen con una regla de hasta 20 condiciones sobre plataforma, sistema y versión, nombre, fabricante, modelo, usuario, departamento (el del activo en el inventario), dominio, etiquetas, programas instalados, cumplimiento, estado o días sin conexión. Un equipo puede estar en varios grupos dinámicos, pero en un solo grupo manual (su grupo principal). La pertenencia se recalcula al cambiar el inventario o la ficha de un equipo, y cada hora.
 
 ## Órdenes
 

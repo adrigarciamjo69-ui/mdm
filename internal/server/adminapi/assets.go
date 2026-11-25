@@ -21,6 +21,8 @@ type ownerJSON struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
+	// Department es el de Entra ID: si no está vacío, manda sobre el del activo.
+	Department string `json:"department"`
 }
 
 type assetJSON struct {
@@ -72,7 +74,7 @@ func (a *api) assetToJSON(r store.AssetRow) assetJSON {
 		out.DeviceID, out.Origin = &s, "agent"
 	}
 	if x.OwnerID != nil {
-		out.Owner = &ownerJSON{ID: x.OwnerID.String(), Name: r.OwnerName, Email: r.OwnerEmail}
+		out.Owner = &ownerJSON{ID: x.OwnerID.String(), Name: r.OwnerName, Email: r.OwnerEmail, Department: r.OwnerDepartment}
 	}
 	if r.Device != nil {
 		d := a.deviceToJSON(*r.Device)
@@ -321,7 +323,7 @@ func (a *api) assetRow(r *http.Request, id uuid.UUID) (store.AssetRow, error) {
 	row := store.AssetRow{Asset: x}
 	if x.OwnerID != nil {
 		if u, err := a.d.Store.DirectoryUserByID(r.Context(), *x.OwnerID); err == nil {
-			row.OwnerName, row.OwnerEmail = u.DisplayName, u.Contact()
+			row.OwnerName, row.OwnerEmail, row.OwnerDepartment = u.DisplayName, u.Contact(), u.Department
 		}
 	}
 	if x.DeviceID != nil {

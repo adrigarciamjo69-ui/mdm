@@ -264,3 +264,49 @@ func TestEnsureAllDeviceAssets_Backfill(t *testing.T) {
 		t.Fatalf("segunda pasada: %d", n)
 	}
 }
+
+func TestAsset_DepartmentFollowsEntraOwner(t *testing.T) {
+	s := storetest.New(t)
+	d := enrollWith(t, s, protocol.EnrollRequest{HardwareID: "hw-dep", Hostname: "PC-DEP"})
+	sync := func(dep string) {
+		t.Helper()
+		if err := s.ApplyDirectorySync(ctx, []store.DirectoryUser{
+			{EntraID: "e1", DisplayName: "Ana", Email: "ana@electrans.es", Department: dep, Enabled: true},
+			{EntraID: "e2", DisplayName: "Sin dpto", Email: "sd@electrans.es", Enabled: true},
+		}, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sync("Finanzas")
+	ana, _ := s.DirectoryUserByEntraID(ctx, "e1")
+	sd, _ := s.DirectoryUserByEntraID(ctx, "e2")
+	a := assetOf(t, s, d)
+	in := store.AssetInput{CategoryID: a.CategoryID, Name: a.Name, Status: a.Status, OwnerID: &ana.ID, Department: "Escrito a mano"}
+	got, err := s.UpdateAsset(ctx, a.ID, in)
+	if err != nil || got.Department != "Finanzas" {
+		t.Fatalf("con dueño de Entra manda su departamento: %q %v", got.Department, err)
+	}
+	if f, _ := s.DeviceFacts(ctx, d, time.Now()); f.Department != "Finanzas" {
+		t.Fatalf("las reglas ven el departamento del activo: %q", f.Department)
+	}
+	// Cambia en Entra: el activo lo sigue en la siguiente sincronización.
+	sync("Compras")
+	if got := assetOf(t, s, d); got.Department != "Compras" {
+		t.Fatalf("tras sincronizar: %q", got.Department)
+	}
+	var jobs int
+	_ = s.Pool().QueryRow(ctx, `SELECT count(*) FROM jobs WHERE kind = 'groups.recompute' AND payload->>'device_id' = $1`, d.String()).Scan(&jobs)
+	if jobs == 0 {
+		t.Fatal("el cambio de departamento recalcula los grupos del equipo")
+	}
+	// Un dueño sin departamento en Entra no borra el que hubiera.
+	in.OwnerID, in.Department = &sd.ID, "Almacén"
+	if got, _ := s.UpdateAsset(ctx, a.ID, in); got.Department != "Almacén" {
+		t.Fatalf("dueño sin departamento: %q", got.Department)
+	}
+	// Sin dueño se edita a mano.
+	in.OwnerID, in.Department = nil, "Taller"
+	if got, _ := s.UpdateAsset(ctx, a.ID, in); got.Department != "Taller" {
+		t.Fatalf("sin dueño: %q", got.Department)
+	}
+}
