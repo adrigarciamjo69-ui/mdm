@@ -297,6 +297,7 @@ func cmdRun(d deps) int {
 	}
 	api.Version = version
 	state, _ := config.LoadState(d.statePath())
+	crashLog(d.configDir)
 	logger := slog.New(slog.NewTextHandler(logOutput(d.configDir), nil))
 	logger.Info("agente en marcha", "version", version, "servidor", cfg.ServerURL, "dispositivo", cfg.DeviceID)
 

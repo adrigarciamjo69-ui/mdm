@@ -39,8 +39,10 @@ type win32BIOS struct {
 	ReleaseDate       *time.Time
 }
 
+// ChassisTypes es uint16[] en CIM, pero WMI lo entrega como enteros de 32
+// bits con signo; con []uint16 la biblioteca entra en pánico.
 type win32SystemEnclosure struct {
-	ChassisTypes []uint16
+	ChassisTypes []int32
 }
 
 type win32ComputerSystemProduct struct {
@@ -98,10 +100,12 @@ func New() Collector {
 
 // query consulta una clase de WMI en el espacio de nombres por defecto o en ns.
 func (c *windowsCollector) query(q string, dst any, ns ...string) error {
-	if len(ns) > 0 {
-		return c.wmi.Query(q, dst, nil, ns[0])
-	}
-	return c.wmi.Query(q, dst)
+	return safeCall(q, func() error {
+		if len(ns) > 0 {
+			return c.wmi.Query(q, dst, nil, ns[0])
+		}
+		return c.wmi.Query(q, dst)
+	})
 }
 
 func regString(root registry.Key, path, name string) string {
@@ -234,11 +238,7 @@ func (c *windowsCollector) hardware() (protocol.Hardware, bool) {
 	var encl []win32SystemEnclosure
 	h.Chassis = protocol.ChassisUnknown
 	if err := c.query("SELECT ChassisTypes FROM Win32_SystemEnclosure", &encl); err == nil && len(encl) > 0 {
-		codes := make([]int, 0, len(encl[0].ChassisTypes))
-		for _, t := range encl[0].ChassisTypes {
-			codes = append(codes, int(t))
-		}
-		h.Chassis = protocol.ChassisFromSMBIOS(codes)
+		h.Chassis = protocol.ChassisFromSMBIOS(chassisCodes(encl[0].ChassisTypes))
 	}
 	return h, true
 }
