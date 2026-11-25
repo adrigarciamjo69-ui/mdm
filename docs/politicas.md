@@ -42,7 +42,7 @@ Las comprobaciones de Windows no dependen del idioma del sistema.
 
 La **contraseña de la cuenta para unir al dominio** se guarda cifrada con `MDM_SECRET_KEY` y la consola no la vuelve a mostrar (para cambiarla, escríbela de nuevo). El servidor solo la descifra al entregar la política al propio equipo, por TLS, y el agente la pasa al script por una variable de entorno; no aparece en la salida ni en el cumplimiento. Usa una cuenta dedicada con permiso únicamente para unir equipos a la OU indicada.
 
-**Equipo nuevo listo en un paso:** crea un grupo dinámico (por ejemplo «Windows sin dominio» o por etiqueta), asígnale una política con «Unir al dominio» y «Energía» en modo «Aplicar» y, si quieres que ocurra nada más inscribirse, una automatización con el evento «equipo inscrito» que lance «Reevaluar políticas».
+**Equipo nuevo listo en un paso:** crea un grupo dinámico (por ejemplo «Windows sin dominio» o por etiqueta), asígnale una política con «Unir al dominio» y «Energía» en modo «Aplicar». El agente evalúa su política nada más inscribirse, así que el equipo se une en cuanto ve un controlador del dominio.
 
 ### Scripts de detección y corrección
 
