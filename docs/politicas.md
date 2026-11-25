@@ -27,6 +27,8 @@ El agente evalúa al recibir una política nueva (en su siguiente conexión, com
 | Almacenamiento USB | Servicio `USBSTOR` deshabilitado (o no) | Cambia su inicio |
 | SMBv1, cuenta de invitado, inicio automático | Desactivados | Los desactiva |
 | Escritorio remoto | `fDenyTSConnections` y reglas del cortafuegos | Permite o deniega |
+| Unir al dominio | `Win32_ComputerSystem`: en el dominio indicado (o unido y pendiente de reinicio) | Comprueba con `nltest /dsgetdc` que hay un controlador a la vista y ejecuta `Add-Computer` con la cuenta indicada y, si se pide, la OU. Reinicia con 5 minutos de aviso o deja el reinicio al usuario. Sin controlador (sin VPN, fuera de la oficina) da error y lo reintenta en cada evaluación. Si el equipo está en otro dominio no lo cambia |
+| Energía | Plan activo, minutos de pantalla y suspensión con corriente y con batería (`powercfg`) e hibernación | `powercfg /setactive`, `/change` y `/hibernate`. Solo toca lo que indica la política |
 | **Linux** | | |
 | Cortafuegos activado | ufw o firewalld activo | `ufw --force enable` o activa firewalld. Sin ninguno: «no aplicable» |
 | Actualizaciones de seguridad automáticas | unattended-upgrades o dnf-automatic en modo seguridad | Los instala y configura |
@@ -37,6 +39,10 @@ El agente evalúa al recibir una política nueva (en su siguiente conexión, com
 | Script personalizado | El script de detección termina con 0 | Ejecuta el script de corrección |
 
 Las comprobaciones de Windows no dependen del idioma del sistema.
+
+La **contraseña de la cuenta para unir al dominio** se guarda cifrada con `MDM_SECRET_KEY` y la consola no la vuelve a mostrar (para cambiarla, escríbela de nuevo). El servidor solo la descifra al entregar la política al propio equipo, por TLS, y el agente la pasa al script por una variable de entorno; no aparece en la salida ni en el cumplimiento. Usa una cuenta dedicada con permiso únicamente para unir equipos a la OU indicada.
+
+**Equipo nuevo listo en un paso:** crea un grupo dinámico (por ejemplo «Windows sin dominio» o por etiqueta), asígnale una política con «Unir al dominio» y «Energía» en modo «Aplicar» y, si quieres que ocurra nada más inscribirse, una automatización con el evento «equipo inscrito» que lance «Reevaluar políticas».
 
 ### Scripts de detección y corrección
 
@@ -59,9 +65,27 @@ Desde el listado (seleccionando equipos), desde la ficha o sobre un grupo:
 | Orden | Rol |
 |---|---|
 | Reiniciar o apagar (con retraso y aviso al usuario), actualizar inventario, reevaluar políticas | Operador |
-| Ejecutar script, retirar (desinstala el agente y revoca el equipo) | Administrador |
+| Ejecutar script, administrador temporal (dar y quitar), retirar (desinstala el agente y revoca el equipo) | Administrador |
 
 **Retirar** borra la configuración del agente (su credencial) y quita el servicio. En Windows el ejecutable queda en `C:\Program Files\MDMAgent` porque el propio proceso lo tiene abierto; se puede borrar a mano o con la siguiente limpieza del equipo.
+
+### Administrador temporal
+
+Hace a un usuario administrador local durante 15 minutos a 8 horas (Windows: grupo Administradores, encontrado por su SID; Linux: grupo `sudo` o `wheel`).
+
+- **Usuario**: vacío para el que tenga la sesión iniciada; si no, `EMPRESA\usuario` (dominio), `AzureAD\usuario@empresa.es` (Entra) o el nombre de la cuenta local.
+- **Motivo**: obligatorio; queda en la auditoría con el usuario y la duración.
+- El agente guarda el permiso en su carpeta antes de darlo y lo quita él solo al caducar: aunque el equipo no tenga red o se reinicie. Lo revisa cada minuto y al arrancar.
+- Si el usuario ya era administrador por otra vía, la orden falla y no se toca nada (así nunca se quita a un administrador permanente). Repetirla amplía el plazo.
+- **Quitar administrador temporal** lo retira antes; con el usuario vacío quita todos los del equipo. La ficha del equipo avisa de los permisos vigentes y tiene «Quitar ya».
+- Al retirar el agente se quitan primero los permisos temporales.
+- La orden solo llega a agentes con esta función (versión actual) y caduca si el equipo no la recoge en 4 horas.
+
+Cómo lo usa el usuario en Windows: al instalar algo, en el aviso de Control de cuentas escribe **su propia** contraseña (o «Ejecutar como administrador»). Para trabajar toda la sesión como administrador, debe cerrar sesión y volver a entrar.
+
+Límites: los programas que se abrieron como administrador siguen así hasta que se cierran, y una sesión iniciada durante el periodo conserva el permiso hasta que se cierra. Mientras es administrador, el usuario podría darse permisos permanentes por su cuenta: concédelo solo a quien sea de confianza; la auditoría registra quién lo pidió y por qué.
+
+### Entrega
 
 Cada equipo recibe la orden en su siguiente conexión. Una orden no entregada caduca a los 7 días. El agente no repite nunca una orden, aunque se reinicie a mitad. La página **Actividad** muestra cada lote con su progreso y la salida de cada equipo (se conserva 30 días).
 
