@@ -135,3 +135,23 @@ func TestPostCompliance_UpdatesState(t *testing.T) {
 		t.Fatalf("informe de una huella antigua: %+v", rec)
 	}
 }
+
+func TestGetPolicy_OpensSecretsForTheAgent(t *testing.T) {
+	a := newAgentAPI(t)
+	c := a.enrolled()
+	sealed, err := testBox.Seal([]byte("Clave-Dominio1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	params := fmt.Sprintf(`{"domain":"empresa.local","username":"EMPRESA\\alta","password":%q,"restart":"manual"}`, sealed)
+	a.assignToAll("windows", policy.Setting{Key: "windows.domain_join", Mode: "enforce", Params: json.RawMessage(params)})
+	eff := c.effective()
+	if len(eff.Settings) != 1 {
+		t.Fatalf("efectiva: %+v", eff)
+	}
+	var got map[string]any
+	_ = json.Unmarshal(eff.Settings[0].Params, &got)
+	if got["password"] != "Clave-Dominio1" || got["domain"] != "empresa.local" {
+		t.Fatalf("parámetros para el agente: %v", got)
+	}
+}
