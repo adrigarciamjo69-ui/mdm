@@ -95,3 +95,22 @@ describe("Versión de un instalador propio", () => {
     }));
   });
 });
+
+describe("Ajustes de una versión", () => {
+  it("«Ver ajustes» muestra desinstalación, códigos y detección de esa versión", async () => {
+    const v = { id: "v1", version: "1.3", file_sha256: "a".repeat(64), file_size: 13_000_000, file_name: "impresora-tsc.exe", installer_type: "exe",
+      install_command: '"{file}" -y', uninstall_command: "C:\\ProgramData\\MDM-TSC\\uninstall.cmd", success_codes: [0, 3010],
+      detection: { type: "registry", registry_key: "HKLM\\SOFTWARE\\TSC", registry_value: "Version", min_version: "1.3" },
+      is_current: true, created_at: "2026-11-26T13:12:00Z" };
+    mockApi({ "GET /auth/me": { body: me() }, "GET /apps/a2": { body: { ...apps[1], current_version: v, versions: [v] } } });
+    renderApp("/software/a2");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Ver ajustes" }));
+    expect(screen.getByText("C:\\ProgramData\\MDM-TSC\\uninstall.cmd")).toBeInTheDocument();
+    expect(screen.getByText("0, 3010")).toBeInTheDocument();
+    expect(screen.getByText("Valor del registro")).toBeInTheDocument();
+    expect(screen.getByText("HKLM\\SOFTWARE\\TSC")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ocultar ajustes" }));
+    expect(screen.queryByText("0, 3010")).toBeNull();
+  });
+});

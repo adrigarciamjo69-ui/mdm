@@ -1,8 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api/client";
-import type { App, Detection, Platform } from "../api/types";
+import type { App, AppVersion, Detection, Platform } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DetectionEditor from "../components/DetectionEditor";
@@ -142,6 +142,34 @@ function VersionForm({ app, onDone }: { app: App; onDone(): void }) {
   );
 }
 
+const DETECTION_LABEL: Record<Detection["type"], string> = {
+  inventory: "Software instalado (inventario)", file: "Existe un fichero", registry: "Valor del registro", script: "Script",
+};
+
+/** Ajustes guardados de una versión, solo lectura. */
+function VersionSettings({ v }: { v: AppVersion }) {
+  const d = v.detection;
+  const mono = (x?: string) => (x ? <span className="mono" style={{ whiteSpace: "pre-wrap" }}>{x}</span> : <span className="muted">—</span>);
+  const rows: [string, ReactNode][] = [
+    ["Tipo de instalador", (v.installer_type ?? "").toUpperCase() || "—"],
+    ["Fichero", <>{v.file_name || "—"} · {formatBytes(v.file_size ?? 0)}</>],
+    ["SHA-256", mono(v.file_sha256)],
+    ["Instalación", mono(v.install_command)],
+    ["Desinstalación", mono(v.uninstall_command)],
+    ["Códigos de éxito", v.success_codes?.length ? v.success_codes.join(", ") : <span className="muted">—</span>],
+    ["Detección", DETECTION_LABEL[d?.type] ?? d?.type ?? "—"],
+  ];
+  if (d?.type === "inventory") rows.push(["Nombre contiene", mono(d.name_contains)], ["Versión mínima", mono(d.min_version)]);
+  if (d?.type === "file") rows.push(["Ruta", mono(d.path)], ["Versión mínima", mono(d.min_version)]);
+  if (d?.type === "registry") rows.push(["Clave", mono(d.registry_key)], ["Valor", mono(d.registry_value)], ["Versión mínima", mono(d.min_version)]);
+  if (d?.type === "script") rows.push(["Intérprete", mono(d.interpreter)], ["Script", mono(d.script)]);
+  return (
+    <dl className="facts small" style={{ padding: "0.5rem 0" }}>
+      {rows.map(([k, val]) => <div key={k} style={{ display: "contents" }}><dt>{k}</dt><dd>{val}</dd></div>)}
+    </dl>
+  );
+}
+
 export default function AppEdit() {
   const { id = "" } = useParams();
   const isNew = id === "nueva";
@@ -151,6 +179,7 @@ export default function AppEdit() {
   const app = useQuery({ queryKey: ["app", id], queryFn: () => api<App>("GET", `/apps/${id}`), enabled: !isNew });
   const [adding, setAdding] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
   useEffect(() => setAdding(false), [id]);
 
   if (isNew) return <NewApp />;
@@ -188,13 +217,20 @@ export default function AppEdit() {
                 <thead><tr><th scope="col">Versión</th><th scope="col">Fichero</th><th scope="col">Instalación</th><th scope="col">Añadida</th><th scope="col"><span className="visually-hidden">Vigente</span></th></tr></thead>
                 <tbody>
                   {a.versions.map((v) => (
-                    <tr key={v.id}>
+                    <Fragment key={v.id}>
+                    <tr>
                       <td><strong>{v.version}</strong>{v.is_current && <> <span className="tag">Vigente</span></>}</td>
                       <td className="small">{v.file_name || v.file_sha256?.slice(0, 12)} · {formatBytes(v.file_size ?? 0)}</td>
                       <td className="mono small">{v.install_command}</td>
                       <td className="nowrap">{v.created_at ? formatDateTime(v.created_at) : ""}</td>
-                      <td className="num">{!v.is_current && can("admin") && <button className="btn btn-small" onClick={() => void setCurrent(v.id)}>Marcar como vigente</button>}</td>
+                      <td className="num nowrap">
+                        <button className="btn btn-small btn-quiet" aria-expanded={open === v.id}
+                          onClick={() => setOpen(open === v.id ? null : v.id)}>{open === v.id ? "Ocultar ajustes" : "Ver ajustes"}</button>{" "}
+                        {!v.is_current && can("admin") && <button className="btn btn-small" onClick={() => void setCurrent(v.id)}>Marcar como vigente</button>}
+                      </td>
                     </tr>
+                    {open === v.id && <tr><td colSpan={5}><VersionSettings v={v} /></td></tr>}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
