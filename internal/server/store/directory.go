@@ -27,6 +27,8 @@ type DirectoryUser struct {
 	DeletedAt   *time.Time
 	SyncedAt    time.Time
 	Notes       string
+	// SamAccount es el usuario de Windows (onPremisesSamAccountName).
+	SamAccount string
 }
 
 // Contact es el correo de la persona o, si no tiene, su UPN.
@@ -38,11 +40,11 @@ func (u DirectoryUser) Contact() string {
 }
 
 const dirCols = `u.id, u.entra_id, u.display_name, u.email, u.upn, u.department, u.job_title, u.employee_id, u.phone,
-	u.office, u.enabled, u.deleted_at, u.synced_at, u.notes`
+	u.office, u.enabled, u.deleted_at, u.synced_at, u.notes, u.sam_account`
 
 func dirDest(u *DirectoryUser) []any {
 	return []any{&u.ID, &u.EntraID, &u.DisplayName, &u.Email, &u.UPN, &u.Department, &u.JobTitle, &u.EmployeeID,
-		&u.Phone, &u.Office, &u.Enabled, &u.DeletedAt, &u.SyncedAt, &u.Notes}
+		&u.Phone, &u.Office, &u.Enabled, &u.DeletedAt, &u.SyncedAt, &u.Notes, &u.SamAccount}
 }
 
 func (s *Store) dirUserWhere(ctx context.Context, cond string, arg any) (DirectoryUser, error) {
@@ -84,13 +86,13 @@ func (s *Store) ApplyDirectorySync(ctx context.Context, users []DirectoryUser, a
 	for _, u := range users {
 		ids = append(ids, u.EntraID)
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO directory_users (entra_id, display_name, email, upn, department, job_title, employee_id, phone, office, enabled, synced_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			`INSERT INTO directory_users (entra_id, display_name, email, upn, department, job_title, employee_id, phone, office, enabled, synced_at, sam_account)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 			 ON CONFLICT (entra_id) DO UPDATE SET display_name = EXCLUDED.display_name, email = EXCLUDED.email,
 			     upn = EXCLUDED.upn, department = EXCLUDED.department, job_title = EXCLUDED.job_title,
 			     employee_id = EXCLUDED.employee_id, phone = EXCLUDED.phone, office = EXCLUDED.office,
-			     enabled = EXCLUDED.enabled, synced_at = EXCLUDED.synced_at, deleted_at = NULL`,
-			u.EntraID, u.DisplayName, u.Email, u.UPN, u.Department, u.JobTitle, u.EmployeeID, u.Phone, u.Office, u.Enabled, at); err != nil {
+			     enabled = EXCLUDED.enabled, synced_at = EXCLUDED.synced_at, sam_account = EXCLUDED.sam_account, deleted_at = NULL`,
+			u.EntraID, u.DisplayName, u.Email, u.UPN, u.Department, u.JobTitle, u.EmployeeID, u.Phone, u.Office, u.Enabled, at, u.SamAccount); err != nil {
 			return fmt.Errorf("guardar usuario %s: %w", u.EntraID, err)
 		}
 	}
@@ -102,6 +104,7 @@ func (s *Store) ApplyDirectorySync(ctx context.Context, users []DirectoryUser, a
 	rows, err := tx.Query(ctx, `UPDATE assets a SET department = u.department, updated_at = now()
 	    FROM directory_users u
 	    WHERE u.id = a.owner_id AND u.department <> '' AND a.department <> u.department AND a.deleted_at IS NULL
+	        AND NOT a.department_locked
 	    RETURNING a.device_id`)
 	if err != nil {
 		return err

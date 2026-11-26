@@ -114,6 +114,8 @@ type graphUser struct {
 	MobilePhone       string `json:"mobilePhone"`
 	OfficeLocation    string `json:"officeLocation"`
 	AccountEnabled    *bool  `json:"accountEnabled"`
+	// SamAccount es el usuario de Windows del AD local sincronizado.
+	SamAccount string `json:"onPremisesSamAccountName"`
 }
 
 // Users devuelve todos los usuarios miembro (sin invitados) del inquilino.
@@ -124,7 +126,7 @@ func (c *Client) Users(ctx context.Context, cr Credentials) ([]store.DirectoryUs
 		return nil, err
 	}
 	q := url.Values{
-		"$select": {"id,displayName,mail,userPrincipalName,department,jobTitle,employeeId,mobilePhone,officeLocation,accountEnabled"},
+		"$select": {"id,displayName,mail,userPrincipalName,department,jobTitle,employeeId,mobilePhone,officeLocation,accountEnabled,onPremisesSamAccountName"},
 		"$filter": {"userType eq 'Member'"},
 		"$top":    {"999"},
 	}
@@ -162,7 +164,7 @@ func (c *Client) Users(ctx context.Context, cr Credentials) ([]store.DirectoryUs
 			enabled := u.AccountEnabled == nil || *u.AccountEnabled
 			out = append(out, store.DirectoryUser{EntraID: u.ID, DisplayName: u.DisplayName, Email: u.Mail,
 				UPN: u.UserPrincipalName, Department: u.Department, JobTitle: u.JobTitle, EmployeeID: u.EmployeeID,
-				Phone: u.MobilePhone, Office: u.OfficeLocation, Enabled: enabled})
+				Phone: u.MobilePhone, Office: u.OfficeLocation, Enabled: enabled, SamAccount: u.SamAccount})
 		}
 		next = body.NextLink
 	}

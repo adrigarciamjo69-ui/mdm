@@ -71,8 +71,11 @@ export default function AssetPanel({ asset }: { asset: Asset }) {
           <Facts rows={[
             ["Categoría", <>{asset.category}{asset.category_auto && <span className="hint"> (automática)</span>}</>],
             ["Estado", <span className={ASSET_STATUS_CLASS[asset.status]}>{ASSET_STATUS_LABEL[asset.status]}</span>],
-            ["Persona", asset.owner ? <Link to={`/usuarios/${asset.owner.id}`}>{asset.owner.name}</Link> : ""],
-            ["Departamento", asset.department],
+            ["Persona", asset.owner ? <>
+              <Link to={`/usuarios/${asset.owner.id}`}>{asset.owner.name}</Link>
+              {asset.origin === "agent" && <span className="hint">{asset.owner_locked ? " (bloqueada)" : " (según la sesión)"}</span>}
+            </> : asset.origin === "agent" && asset.owner_locked ? <span className="hint">— (bloqueada)</span> : ""],
+            ["Departamento", asset.department ? <>{asset.department}{asset.department_locked && <span className="hint"> (bloqueado)</span>}</> : ""],
             ["Ubicación", asset.location],
             ["Marca y modelo", [asset.brand, asset.model].filter(Boolean).join(" ")],
             ["Número de serie", asset.serial ? <span className="mono">{asset.serial}</span> : ""],

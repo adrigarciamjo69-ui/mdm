@@ -171,6 +171,9 @@ a:hover { text-decoration-thickness: 2px; }
 .field { display: grid; gap: 0.3rem; margin-bottom: 1rem; }
 .field > span { font-weight: 550; font-size: var(--step--1); }
 .field .hint { color: var(--steel); font-size: var(--step--1); font-weight: 400; }
+.field-with-lock { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field-with-lock > .hint { color: var(--steel); font-size: var(--step--1); }
+.lock-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: var(--step--1); color: var(--steel); cursor: pointer; }
 
 input, select, textarea {
   font: inherit; color: var(--ink); background: var(--surface);

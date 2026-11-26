@@ -16,12 +16,14 @@ import (
 func init() { afterAssetWrite = syncDeviceUser }
 
 // syncDeviceUser mantiene lo que depende del dueño del activo: si es una
-// persona de Entra ID con departamento, el activo toma ese departamento; y el
+// persona de Entra ID con departamento, el activo toma ese departamento (salvo
+// que esté bloqueado); y el
 // equipo enlazado copia su correo y recalcula sus grupos dinámicos (las reglas
 // por usuario y por departamento).
 func syncDeviceUser(ctx context.Context, q querier, assetID uuid.UUID) error {
 	if _, err := q.Exec(ctx, `UPDATE assets a SET department = u.department
-	    FROM directory_users u WHERE a.id = $1 AND u.id = a.owner_id AND u.department <> '' AND a.department <> u.department`, assetID); err != nil {
+	    FROM directory_users u WHERE a.id = $1 AND u.id = a.owner_id AND u.department <> '' AND a.department <> u.department
+	    AND NOT a.department_locked`, assetID); err != nil {
 		return err
 	}
 	var deviceID *uuid.UUID
@@ -34,6 +36,84 @@ func syncDeviceUser(ctx context.Context, q querier, assetID uuid.UUID) error {
 		return EnqueueRecomputeDevice(ctx, q, *deviceID, time.Now())
 	}
 	return nil
+}
+
+// sessionLogin separa el usuario con sesión que informa el agente
+// ("DOMINIO\usuario", "usuario@dominio" o "usuario") en el nombre corto y,
+// si lo hay, el UPN completo. Ambos en minúsculas.
+func sessionLogin(login string) (short, upn string) {
+	l := strings.ToLower(strings.TrimSpace(login))
+	if i := strings.LastIndex(l, `\`); i >= 0 {
+		l = l[i+1:]
+	}
+	if i := strings.Index(l, "@"); i >= 0 {
+		return l[:i], l
+	}
+	return l, ""
+}
+
+// directoryUserForLogin busca la persona de Entra ID que corresponde al
+// usuario con sesión en un equipo. Primero por coincidencia exacta (usuario
+// de Windows de AD o UPN) y si no, por la parte del UPN o del correo antes de
+// la arroba. Si no hay ninguna o hay dos igual de buenas, devuelve nil.
+func directoryUserForLogin(ctx context.Context, q querier, login string) (*uuid.UUID, error) {
+	short, upn := sessionLogin(login)
+	if short == "" {
+		return nil, nil
+	}
+	rows, err := q.Query(ctx, `SELECT id, (lower(sam_account) = $1 OR lower(upn) = $2 OR lower(email) = $2) AS exact, enabled
+	    FROM directory_users
+	    WHERE deleted_at IS NULL AND (lower(sam_account) = $1 OR lower(upn) = $2 OR lower(email) = $2
+	        OR split_part(lower(upn), '@', 1) = $1 OR split_part(lower(email), '@', 1) = $1)
+	    ORDER BY exact DESC, enabled DESC LIMIT 2`, short, upn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	type cand struct {
+		id             uuid.UUID
+		exact, enabled bool
+	}
+	var cs []cand
+	for rows.Next() {
+		var c cand
+		if err := rows.Scan(&c.id, &c.exact, &c.enabled); err != nil {
+			return nil, err
+		}
+		cs = append(cs, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	switch {
+	case len(cs) == 0:
+		return nil, nil
+	case len(cs) == 2 && cs[0].exact == cs[1].exact && cs[0].enabled == cs[1].enabled:
+		return nil, nil // ambiguo: mejor no tocar nada
+	}
+	return &cs[0].id, nil
+}
+
+// applySessionUser hace que la persona del activo de un equipo sea la del
+// usuario con la sesión iniciada, salvo que la persona esté bloqueada. Si el
+// usuario no corresponde a nadie de Entra ID (una cuenta local, por ejemplo)
+// no cambia nada.
+func applySessionUser(ctx context.Context, q querier, deviceID uuid.UUID, login string) error {
+	owner, err := directoryUserForLogin(ctx, q, login)
+	if err != nil || owner == nil {
+		return err
+	}
+	var assetID uuid.UUID
+	err = q.QueryRow(ctx, `UPDATE assets SET owner_id = $2, updated_at = now()
+	    WHERE device_id = $1 AND deleted_at IS NULL AND NOT owner_locked AND owner_id IS DISTINCT FROM $2
+	    RETURNING id`, deviceID, *owner).Scan(&assetID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return syncDeviceUser(ctx, q, assetID)
 }
 
 // categoryFor elige la categoría inicial de un equipo con agente.

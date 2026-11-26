@@ -11,7 +11,7 @@ import type { Asset, Device } from "../api/types";
 const base = (o: Partial<Asset>): Asset => ({
   id: "x", device_id: null, origin: "manual", category_id: "c1", category: "Portátil", category_auto: false, name: "", brand: "", model: "",
   serial: "", asset_tag: "", status: "en_uso", owner: null, department: "", location: "", price: null, purchase_date: "", warranty_until: "",
-  purchase_order: "", supplier: "", notes: "", deleted_at: null, deleted_reason: "", created_at: "2026-11-25T09:00:00Z",
+  purchase_order: "", supplier: "", notes: "", deleted_at: null, deleted_reason: "", owner_locked: false, department_locked: false, created_at: "2026-11-25T09:00:00Z",
   updated_at: "2026-11-25T09:00:00Z", device: null, ...o,
 });
 const manual = base({ id: "m1", name: "Portátil de Ana", asset_tag: "EL-7", location: "Bilbao", price: 899, notes: "Factura en Documentos" });

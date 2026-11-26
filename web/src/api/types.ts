@@ -363,6 +363,10 @@ export interface Asset {
   created_at: string;
   updated_at: string;
   device: Device | null;
+  /** La persona no sigue al usuario con sesión en el equipo. */
+  owner_locked: boolean;
+  /** El departamento no sigue al de la persona ni a la sesión. */
+  department_locked: boolean;
 }
 
 export interface Category {

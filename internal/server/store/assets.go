@@ -72,6 +72,10 @@ type Asset struct {
 	DeletedReason string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	// OwnerLocked y DepartmentLocked impiden que la persona y el departamento
+	// sigan al usuario con la sesión iniciada en el equipo.
+	OwnerLocked      bool
+	DepartmentLocked bool
 }
 
 // AssetInput son los campos que un usuario fija en un activo.
@@ -92,6 +96,9 @@ type AssetInput struct {
 	PurchaseOrder string
 	Supplier      string
 	Notes         string
+	// OwnerLocked y DepartmentLocked: ver Asset.
+	OwnerLocked      bool
+	DepartmentLocked bool
 }
 
 func (in *AssetInput) normalize() error {
@@ -106,14 +113,16 @@ func (in *AssetInput) normalize() error {
 
 const assetCols = `a.id, a.device_id, a.category_id, c.name, a.category_auto, a.name, a.brand, a.model, a.serial,
 	a.asset_tag, a.status, a.owner_id, a.department, a.location, a.price::float8, a.purchase_date, a.warranty_until,
-	a.purchase_order, a.supplier, a.notes, a.deleted_at, a.deleted_by, a.deleted_reason, a.created_at, a.updated_at`
+	a.purchase_order, a.supplier, a.notes, a.deleted_at, a.deleted_by, a.deleted_reason, a.created_at, a.updated_at,
+	a.owner_locked, a.department_locked`
 
 const assetFrom = ` FROM assets a JOIN asset_categories c ON c.id = a.category_id`
 
 func assetDest(a *Asset) []any {
 	return []any{&a.ID, &a.DeviceID, &a.CategoryID, &a.CategoryName, &a.CategoryAuto, &a.Name, &a.Brand, &a.Model, &a.Serial,
 		&a.AssetTag, &a.Status, &a.OwnerID, &a.Department, &a.Location, &a.Price, &a.PurchaseDate, &a.WarrantyUntil,
-		&a.PurchaseOrder, &a.Supplier, &a.Notes, &a.DeletedAt, &a.DeletedBy, &a.DeletedReason, &a.CreatedAt, &a.UpdatedAt}
+		&a.PurchaseOrder, &a.Supplier, &a.Notes, &a.DeletedAt, &a.DeletedBy, &a.DeletedReason, &a.CreatedAt, &a.UpdatedAt,
+		&a.OwnerLocked, &a.DepartmentLocked}
 }
 
 // assetUniqueErr traduce las violaciones de unicidad de los activos.
@@ -176,10 +185,11 @@ func (s *Store) CreateAsset(ctx context.Context, in AssetInput) (Asset, error) {
 	var id uuid.UUID
 	err = tx.QueryRow(ctx,
 		`INSERT INTO assets (category_id, name, brand, model, serial, serial_key, asset_tag, status, owner_id, department,
-		                     location, price, purchase_date, warranty_until, purchase_order, supplier, notes)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
+		                     location, price, purchase_date, warranty_until, purchase_order, supplier, notes, owner_locked, department_locked)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id`,
 		in.CategoryID, in.Name, in.Brand, in.Model, in.Serial, SerialKey(in.Serial), in.AssetTag, in.Status, in.OwnerID,
-		in.Department, in.Location, in.Price, in.PurchaseDate, in.WarrantyUntil, in.PurchaseOrder, in.Supplier, in.Notes).Scan(&id)
+		in.Department, in.Location, in.Price, in.PurchaseDate, in.WarrantyUntil, in.PurchaseOrder, in.Supplier, in.Notes,
+		in.OwnerLocked, in.DepartmentLocked).Scan(&id)
 	if err != nil {
 		return Asset{}, assetUniqueErr(err)
 	}
@@ -208,10 +218,11 @@ func (s *Store) UpdateAsset(ctx context.Context, id uuid.UUID, in AssetInput) (A
 		`UPDATE assets SET category_auto = category_auto AND category_id = $2, category_id = $2, name = $3, brand = $4,
 		     model = $5, serial = $6, serial_key = $7, asset_tag = $8, status = $9, owner_id = $10, department = $11,
 		     location = $12, price = $13, purchase_date = $14, warranty_until = $15, purchase_order = $16, supplier = $17,
-		     notes = $18, updated_at = now()
+		     notes = $18, owner_locked = $19, department_locked = $20, updated_at = now()
 		 WHERE id = $1 AND deleted_at IS NULL`,
 		id, in.CategoryID, in.Name, in.Brand, in.Model, in.Serial, SerialKey(in.Serial), in.AssetTag, in.Status, in.OwnerID,
-		in.Department, in.Location, in.Price, in.PurchaseDate, in.WarrantyUntil, in.PurchaseOrder, in.Supplier, in.Notes)
+		in.Department, in.Location, in.Price, in.PurchaseDate, in.WarrantyUntil, in.PurchaseOrder, in.Supplier, in.Notes,
+		in.OwnerLocked, in.DepartmentLocked)
 	if err != nil {
 		return Asset{}, assetUniqueErr(err)
 	}

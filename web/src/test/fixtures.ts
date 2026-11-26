@@ -59,7 +59,7 @@ export function asset(over: Partial<Asset> = {}): Asset {
     name: "Monitor sala", brand: "Dell", model: "P2422H", serial: "CN-0ABC", asset_tag: "EL-1", status: "en_almacen",
     owner: null, department: "", location: "Planta 1", price: 150.5, purchase_date: "2026-01-15", warranty_until: "",
     purchase_order: "", supplier: "", notes: "", deleted_at: null, deleted_reason: "", created_at: "2026-11-01T08:00:00Z",
-    updated_at: "2026-11-01T08:00:00Z", device: null, ...over,
+    updated_at: "2026-11-01T08:00:00Z", device: null, owner_locked: false, department_locked: false, ...over,
   };
 }
 

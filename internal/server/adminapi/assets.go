@@ -53,6 +53,10 @@ type assetJSON struct {
 	CreatedAt     time.Time   `json:"created_at"`
 	UpdatedAt     time.Time   `json:"updated_at"`
 	Device        *deviceJSON `json:"device"`
+	// OwnerLocked y DepartmentLocked: la persona y el departamento no siguen
+	// al usuario con sesión en el equipo.
+	OwnerLocked      bool `json:"owner_locked"`
+	DepartmentLocked bool `json:"department_locked"`
 }
 
 func dateStr(t *time.Time) string {
@@ -69,7 +73,7 @@ func (a *api) assetToJSON(r store.AssetRow) assetJSON {
 		Status: x.Status, Department: x.Department, Location: x.Location, Price: x.Price,
 		PurchaseDate: dateStr(x.PurchaseDate), WarrantyUntil: dateStr(x.WarrantyUntil), PurchaseOrder: x.PurchaseOrder,
 		Supplier: x.Supplier, Notes: x.Notes, DeletedAt: x.DeletedAt, DeletedReason: x.DeletedReason,
-		CreatedAt: x.CreatedAt, UpdatedAt: x.UpdatedAt}
+		CreatedAt: x.CreatedAt, UpdatedAt: x.UpdatedAt, OwnerLocked: x.OwnerLocked, DepartmentLocked: x.DepartmentLocked}
 	if x.DeviceID != nil {
 		s := x.DeviceID.String()
 		out.DeviceID, out.Origin = &s, "agent"
@@ -102,6 +106,9 @@ type assetInputJSON struct {
 	PurchaseOrder string   `json:"purchase_order"`
 	Supplier      string   `json:"supplier"`
 	Notes         string   `json:"notes"`
+	// Ausentes valen false: la persona y el departamento siguen la sesión.
+	OwnerLocked      bool `json:"owner_locked"`
+	DepartmentLocked bool `json:"department_locked"`
 }
 
 const (
@@ -127,7 +134,8 @@ func (a *api) toInput(r *http.Request, in assetInputJSON) (store.AssetInput, str
 	out := store.AssetInput{Name: strings.TrimSpace(in.Name), Brand: strings.TrimSpace(in.Brand), Model: strings.TrimSpace(in.Model),
 		Serial: strings.TrimSpace(in.Serial), AssetTag: strings.TrimSpace(in.AssetTag), Status: in.Status,
 		Department: strings.TrimSpace(in.Department), Location: strings.TrimSpace(in.Location), Price: in.Price,
-		PurchaseOrder: strings.TrimSpace(in.PurchaseOrder), Supplier: strings.TrimSpace(in.Supplier), Notes: strings.TrimSpace(in.Notes)}
+		PurchaseOrder: strings.TrimSpace(in.PurchaseOrder), Supplier: strings.TrimSpace(in.Supplier), Notes: strings.TrimSpace(in.Notes),
+		OwnerLocked: in.OwnerLocked, DepartmentLocked: in.DepartmentLocked}
 	cat, err := uuid.Parse(in.CategoryID)
 	if err != nil {
 		return out, "Elige una categoría."
@@ -447,6 +455,10 @@ func assetChanges(b, x store.Asset) map[string]any {
 		return id.String()
 	}
 	add("owner_id", owner(b.OwnerID), owner(x.OwnerID))
+	add("department", b.Department, x.Department)
+	lock := strconv.FormatBool
+	add("owner_locked", lock(b.OwnerLocked), lock(x.OwnerLocked))
+	add("department_locked", lock(b.DepartmentLocked), lock(x.DepartmentLocked))
 	return ch
 }
 

@@ -22,6 +22,8 @@ export interface AssetBody {
   purchase_order: string;
   supplier: string;
   notes: string;
+  owner_locked: boolean;
+  department_locked: boolean;
 }
 
 function initial(a?: Asset): AssetBody {
@@ -30,6 +32,7 @@ function initial(a?: Asset): AssetBody {
     asset_tag: a?.asset_tag ?? "", status: a?.status ?? "en_almacen", owner_id: a?.owner?.id ?? "", department: a?.department ?? "",
     location: a?.location ?? "", price: a?.price ?? null, purchase_date: a?.purchase_date ?? "", warranty_until: a?.warranty_until ?? "",
     purchase_order: a?.purchase_order ?? "", supplier: a?.supplier ?? "", notes: a?.notes ?? "",
+    owner_locked: a?.owner_locked ?? false, department_locked: a?.department_locked ?? false,
   };
 }
 
@@ -48,6 +51,28 @@ export default function AssetForm({ asset, onSave, onCancel, saveLabel = "Guarda
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof AssetBody>(k: K, v: AssetBody[K]) => setF((p) => ({ ...p, [k]: v }));
   const agent = asset?.origin === "agent";
+  // Sin bloquear, el departamento es el de la persona en Entra ID (si lo tiene).
+  const deptFollows = !!owner?.department && !f.department_locked;
+
+  function changeOwner(p: PersonRef | null) {
+    setOwner(p);
+    // Elegir a mano la persona de un equipo con agente la bloquea: si no, la
+    // siguiente sesión la cambiaría. Se puede desmarcar.
+    if (agent) set("owner_locked", true);
+  }
+
+  function toggleDeptLock(locked: boolean) {
+    // Al bloquear se parte del departamento que se estaba mostrando.
+    setF((p) => ({ ...p, department_locked: locked, department: locked && owner?.department && !p.department_locked ? owner.department : p.department }));
+  }
+
+  const lock = (k: "owner_locked" | "department_locked", onToggle: (v: boolean) => void) => (
+    <label className="lock-toggle" title={k === "owner_locked"
+      ? "Bloqueada: no cambia aunque inicie sesión otra persona en el equipo."
+      : "Bloqueado: no sigue al departamento de la persona en Entra ID."}>
+      <input type="checkbox" checked={f[k]} onChange={(e) => onToggle(e.target.checked)} /> Bloquear
+    </label>
+  );
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -61,7 +86,7 @@ export default function AssetForm({ asset, onSave, onCancel, saveLabel = "Guarda
     }
     setBusy(true);
     try {
-      await onSave({ ...f, name: f.name.trim(), price: p, owner_id: owner?.id ?? "" });
+      await onSave({ ...f, name: f.name.trim(), price: p, owner_id: owner?.id ?? "", department: deptFollows ? owner!.department! : f.department });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se ha podido guardar el activo.");
     } finally {
@@ -98,13 +123,20 @@ export default function AssetForm({ asset, onSave, onCancel, saveLabel = "Guarda
         {text("model", "Modelo")}
         {text("serial", "Número de serie", { mono: true })}
         {text("asset_tag", "Etiqueta interna", { mono: true })}
-        <PersonPicker label="Persona" value={owner} onChange={setOwner} />
-        {owner?.department ? (
-          <label className="field">
-            <span>Departamento <span className="hint">el de la persona en Entra ID</span></span>
-            <input value={owner.department} disabled />
-          </label>
-        ) : text("department", "Departamento")}
+        <div className="field-with-lock">
+          <PersonPicker label="Persona" value={owner} onChange={changeOwner} />
+          {agent && lock("owner_locked", (v) => set("owner_locked", v))}
+          {agent && !f.owner_locked && <span className="hint small">Sigue al usuario con sesión en el equipo</span>}
+        </div>
+        <div className="field-with-lock">
+          {deptFollows ? (
+            <label className="field">
+              <span>Departamento <span className="hint">el de la persona en Entra ID</span></span>
+              <input value={owner!.department} disabled />
+            </label>
+          ) : text("department", "Departamento")}
+          {(agent || owner?.department) && lock("department_locked", toggleDeptLock)}
+        </div>
         {text("location", "Ubicación")}
       </div>
       <fieldset className="params">
