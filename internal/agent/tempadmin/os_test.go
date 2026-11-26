@@ -157,3 +157,12 @@ func TestLinuxOS(t *testing.T) {
 		t.Fatalf("wheel: %+v", c)
 	}
 }
+
+func TestWindowsOS_CurrentUserFallsBackToSessions(t *testing.T) {
+	// Win32_ComputerSystem.UserName vacío (Escritorio remoto, cambio rápido de usuario).
+	w := &Windows{Run: (&fakeRun{reply: func(string, []string) (string, error) { return "\r\n", nil }}).run,
+		Session: func() string { return `ELECTRANS\fresadora` }}
+	if u, err := w.CurrentUser(ctx); err != nil || u != `ELECTRANS\fresadora` {
+		t.Fatalf("usuario de la sesión: %q %v", u, err)
+	}
+}

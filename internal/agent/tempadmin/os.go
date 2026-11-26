@@ -33,8 +33,11 @@ func lastLine(s string) string {
 // Windows usa el grupo local de administradores por su SID (S-1-5-32-544),
 // cuyo nombre depende del idioma, y net.exe para añadir y quitar.
 type Windows struct {
-	Run   Runner
-	group string
+	Run Runner
+	// Session devuelve el usuario de la sesión activa por Terminal Services
+	// cuando WMI no lo sabe (Escritorio remoto, cambio rápido de usuario).
+	Session func() string
+	group   string
 }
 
 func (w *Windows) powershell(ctx context.Context, command string) (string, error) {
@@ -66,6 +69,9 @@ func (w *Windows) CurrentUser(ctx context.Context) (string, error) {
 		return "", err
 	}
 	u := strings.TrimSpace(out)
+	if u == "" && w.Session != nil {
+		u = strings.TrimSpace(w.Session())
+	}
 	if u == "" {
 		return "", errors.New("no hay ningún usuario con la sesión iniciada")
 	}

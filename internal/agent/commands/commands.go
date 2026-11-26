@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -314,6 +315,10 @@ func (r *Runner) execute(ctx context.Context, c protocol.Command) protocol.Comma
 			res := ok()
 			res.Stdout = fmt.Sprintf("%s es administrador de este equipo hasta las %s (hora del equipo). Después se le quitará el permiso automáticamente.\n",
 				g.User, g.ExpiresAt.Local().Format("15:04 del 02/01/2006"))
+			if runtime.GOOS == "windows" {
+				res.Stdout += "Windows aplica el permiso a las sesiones nuevas: en el aviso de Control de cuentas, el usuario escribe SU PROPIO usuario y contraseña. " +
+					"Para que el aviso sea solo «Sí/No», tiene que cerrar sesión y volver a entrar.\n"
+			}
 			return res
 		}
 		var p protocol.TempAdminRevokePayload

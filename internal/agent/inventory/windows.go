@@ -12,6 +12,7 @@ import (
 	"github.com/yusufpapurcu/wmi"
 	"golang.org/x/sys/windows/registry"
 
+	"mdm/internal/agent/winsession"
 	"mdm/internal/protocol"
 )
 
@@ -206,6 +207,11 @@ func (c *windowsCollector) system() (protocol.System, bool) {
 			s.Domain = cs[0].Domain
 		}
 		s.LoggedInUser = cs[0].UserName
+	}
+	if s.LoggedInUser == "" {
+		// WMI solo ve la consola física: con Escritorio remoto o cambio
+		// rápido de usuario se mira en las sesiones de Terminal Services.
+		s.LoggedInUser = winsession.ActiveUser()
 	}
 	return s, true
 }

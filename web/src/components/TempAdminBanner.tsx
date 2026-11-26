@@ -22,6 +22,7 @@ export default function TempAdminBanner({ deviceId, hostname }: { deviceId: stri
       {grants.map((g) => (
         <p key={g.user} className="banner">
           {g.user || "El usuario con la sesión iniciada"} es administrador temporal hasta {time(g.expiresAt)}{g.reason && <> · {g.reason}</>}.
+          {" "}En el aviso de Control de cuentas debe escribir su propio usuario y contraseña, o cerrar sesión y volver a entrar.
           {can("admin") && <> <button className="btn btn-small" onClick={() => setRevoke(g.user)}>Quitar ya</button></>}
         </p>
       ))}

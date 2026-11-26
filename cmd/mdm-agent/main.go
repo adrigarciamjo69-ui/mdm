@@ -35,6 +35,7 @@ import (
 	"mdm/internal/agent/settings"
 	"mdm/internal/agent/tempadmin"
 	"mdm/internal/agent/update"
+	"mdm/internal/agent/winsession"
 	"mdm/internal/protocol"
 )
 
@@ -356,7 +357,7 @@ func cmdRun(d deps) int {
 	})
 	var tempOS tempadmin.OS = &tempadmin.Linux{Run: tempadmin.ExecRunner, Root: "/"}
 	if runtime.GOOS == "windows" {
-		tempOS = &tempadmin.Windows{Run: tempadmin.ExecRunner}
+		tempOS = &tempadmin.Windows{Run: tempadmin.ExecRunner, Session: winsession.ActiveUser}
 	}
 	tempAdmins, err := tempadmin.New(tempadmin.Deps{OS: tempOS, StatePath: filepath.Join(d.configDir, "tempadmin.json"), Log: logger})
 	if err != nil {
