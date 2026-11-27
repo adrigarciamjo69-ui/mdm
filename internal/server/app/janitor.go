@@ -79,11 +79,20 @@ func RegisterJobs(r *jobs.Runner, s *store.Store, fs *files.Store, now func() ti
 	r.Every("cleanup", time.Hour)
 
 	// assets.backfill: cada equipo tiene su activo en el inventario (al
-	// arrancar y cada hora, por si alguno quedó sin él).
+	// arrancar y cada hora, por si alguno quedó sin él) y su persona según el
+	// usuario con sesión.
 	r.Handle("assets.backfill", func(ctx context.Context, _ json.RawMessage) error {
 		n, err := s.EnsureAllDeviceAssets(ctx)
 		if n > 0 {
 			slog.Info("inventario: activos creados para equipos", "n", n)
+		}
+		if err != nil {
+			return err
+		}
+		// Persona según el usuario con sesión del último inventario.
+		m, err := s.ApplyAllSessionUsers(ctx)
+		if m > 0 {
+			slog.Info("inventario: personas asignadas por sesión", "n", m)
 		}
 		return err
 	})

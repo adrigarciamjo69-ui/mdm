@@ -61,11 +61,17 @@ func directoryUserForLogin(ctx context.Context, q querier, login string) (*uuid.
 	if short == "" {
 		return nil, nil
 	}
-	rows, err := q.Query(ctx, `SELECT id, (lower(sam_account) = $1 OR lower(upn) = $2 OR lower(email) = $2) AS exact, enabled
-	    FROM directory_users
-	    WHERE deleted_at IS NULL AND (lower(sam_account) = $1 OR lower(upn) = $2 OR lower(email) = $2
-	        OR split_part(lower(upn), '@', 1) = $1 OR split_part(lower(email), '@', 1) = $1)
-	    ORDER BY exact DESC, enabled DESC LIMIT 2`, short, upn)
+	// $2 es NULL si la sesión no trae UPN: comparar con '' haría «exacta» a
+	// cualquier persona sin correo.
+	var full *string
+	if upn != "" {
+		full = &upn
+	}
+	rows, err := q.Query(ctx, `SELECT id, COALESCE(lower(sam_account) = $1 OR lower(upn) = $2 OR lower(email) = $2, false) AS exact, enabled
+	    FROM (SELECT * FROM directory_users WHERE deleted_at IS NULL) u
+	    WHERE (sam_account <> '' AND lower(sam_account) = $1) OR lower(upn) = $2 OR lower(email) = $2
+	        OR (upn <> '' AND split_part(lower(upn), '@', 1) = $1) OR (email <> '' AND split_part(lower(email), '@', 1) = $1)
+	    ORDER BY exact DESC, enabled DESC LIMIT 2`, short, full)
 	if err != nil {
 		return nil, err
 	}
@@ -114,6 +120,66 @@ func applySessionUser(ctx context.Context, q querier, deviceID uuid.UUID, login 
 		return err
 	}
 	return syncDeviceUser(ctx, q, assetID)
+}
+
+// applyAllSessionUsers aplica applySessionUser a todos los equipos con el
+// usuario con sesión de su último inventario guardado. Sirve para no esperar
+// a que cada agente vuelva a enviar el inventario (tras una sincronización con
+// Entra ID o al desplegar). Devuelve cuántos activos han cambiado de persona.
+func applyAllSessionUsers(ctx context.Context, q querier) (int, error) {
+	rows, err := q.Query(ctx, `SELECT a.device_id, a.owner_id, i.data->'system'->>'logged_in_user'
+	    FROM assets a JOIN device_inventory i ON i.device_id = a.device_id
+	    WHERE a.deleted_at IS NULL AND NOT a.owner_locked AND COALESCE(i.data->'system'->>'logged_in_user', '') <> ''`)
+	if err != nil {
+		return 0, err
+	}
+	type item struct {
+		dev   uuid.UUID
+		owner *uuid.UUID
+		login string
+	}
+	var items []item
+	for rows.Next() {
+		var it item
+		if err := rows.Scan(&it.dev, &it.owner, &it.login); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		items = append(items, it)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, it := range items {
+		owner, err := directoryUserForLogin(ctx, q, it.login)
+		if err != nil {
+			return n, err
+		}
+		if owner == nil || (it.owner != nil && *it.owner == *owner) {
+			continue
+		}
+		if err := applySessionUser(ctx, q, it.dev, it.login); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+// ApplyAllSessionUsers: ver applyAllSessionUsers.
+func (s *Store) ApplyAllSessionUsers(ctx context.Context) (int, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+	n, err := applyAllSessionUsers(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
+	return n, tx.Commit(ctx)
 }
 
 // categoryFor elige la categoría inicial de un equipo con agente.

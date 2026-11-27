@@ -129,6 +129,10 @@ func (s *Store) ApplyDirectorySync(ctx context.Context, users []DirectoryUser, a
 			return err
 		}
 	}
+	// Con las personas al día, cada equipo toma la de su usuario con sesión.
+	if _, err := applyAllSessionUsers(ctx, tx); err != nil {
+		return fmt.Errorf("persona por sesión: %w", err)
+	}
 	// El correo de los equipos de cada persona sigue al del directorio.
 	if _, err := tx.Exec(ctx, `UPDATE devices d SET assigned_user = COALESCE(NULLIF(u.email, ''), u.upn)
 	    FROM assets a JOIN directory_users u ON u.id = a.owner_id

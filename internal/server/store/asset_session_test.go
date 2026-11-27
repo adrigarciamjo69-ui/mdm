@@ -31,6 +31,9 @@ func TestSessionUser_SetsOwnerAndDepartment(t *testing.T) {
 	if err := s.ApplyDirectorySync(ctx, []store.DirectoryUser{
 		{EntraID: "e1", DisplayName: "Ferran Sarerols", Email: "fsarerols@electrans.es", UPN: "fsarerols@electrans.es", Department: "Taller", Enabled: true},
 		{EntraID: "e2", DisplayName: "Ana Pérez", Email: "ana.perez@electrans.es", UPN: "ana.perez@electrans.es", SamAccount: "aperez", Department: "Finanzas", Enabled: true},
+		// Cuentas sin correo (salas, servicios): no deben coincidir con nadie.
+		{EntraID: "e3", DisplayName: "Sala 1", UPN: "sala1@electrans.onmicrosoft.com", Enabled: true},
+		{EntraID: "e4", DisplayName: "Sala 2", UPN: "sala2@electrans.onmicrosoft.com", Enabled: true},
 	}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -125,5 +128,30 @@ func TestSessionUser_AmbiguousDoesNothing(t *testing.T) {
 	b, _ := s.DirectoryUserByEntraID(ctx, "e2")
 	if a := assetOf(t, s, dev); ownerOf(a) != b.ID.String() {
 		t.Fatalf("UPN exacto: %+v", a)
+	}
+}
+
+func TestSessionUser_BackfillFromStoredInventory(t *testing.T) {
+	s := storetest.New(t)
+	dev := enrollWith(t, s, protocol.EnrollRequest{HardwareID: "hw1", Hostname: "2138P"})
+	// El inventario llega antes de que la persona exista en el directorio.
+	sessionInventory(t, s, dev, `ELECTRANS\fsarerols`)
+	if a := assetOf(t, s, dev); a.OwnerID != nil {
+		t.Fatalf("aún no hay directorio: %+v", a)
+	}
+	// Al sincronizar Entra ID se asigna sin esperar a otro inventario.
+	if err := s.ApplyDirectorySync(ctx, []store.DirectoryUser{
+		{EntraID: "e1", DisplayName: "Ferran", Email: "fsarerols@electrans.es", UPN: "fsarerols@electrans.es", Department: "Taller", Enabled: true},
+		{EntraID: "e9", DisplayName: "Sin correo", UPN: "svc@electrans.onmicrosoft.com", Enabled: true},
+	}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := s.DirectoryUserByEntraID(ctx, "e1")
+	if a := assetOf(t, s, dev); ownerOf(a) != f.ID.String() || a.Department != "Taller" {
+		t.Fatalf("tras sincronizar: %+v", a)
+	}
+	// La tarea periódica no cambia nada más.
+	if n, err := s.ApplyAllSessionUsers(ctx); err != nil || n != 0 {
+		t.Fatalf("repetir: n=%d err=%v", n, err)
 	}
 }
