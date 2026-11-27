@@ -27,10 +27,12 @@ type DeviceFilter struct {
 	Compliance string
 	Issue      string
 	GroupID    *uuid.UUID
-	Sort       string
-	Order      string
-	Page       int
-	PerPage    int
+	// GroupIDs: el equipo está en cualquiera de ellos (se suma a GroupID).
+	GroupIDs []uuid.UUID
+	Sort     string
+	Order    string
+	Page     int
+	PerPage  int
 	// All devuelve todas las filas, sin paginar (exportación).
 	All              bool
 	Now              time.Time
@@ -90,9 +92,13 @@ func (f DeviceFilter) where() (string, []any) {
 	if f.Tag != "" {
 		conds = append(conds, arg(f.Tag)+" = ANY(d.tags)")
 	}
+	groups := f.GroupIDs
 	if f.GroupID != nil {
-		g := arg(*f.GroupID)
-		conds = append(conds, fmt.Sprintf("(d.group_id = %[1]s OR EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = %[1]s AND m.device_id = d.id))", g))
+		groups = append(groups, *f.GroupID)
+	}
+	if len(groups) > 0 {
+		g := arg(groups)
+		conds = append(conds, fmt.Sprintf("(d.group_id = ANY(%[1]s) OR EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = ANY(%[1]s) AND m.device_id = d.id))", g))
 	}
 	switch f.Status {
 	case StatusRevoked:

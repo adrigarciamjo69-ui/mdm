@@ -11,11 +11,17 @@ import ActionBar from "../components/ActionBar";
 import MergeDialog from "../components/MergeDialog";
 import PersonPicker from "../components/PersonPicker";
 import { useDebounced } from "../lib/hooks";
-import { ASSET_STATUS_CLASS, ASSET_STATUS_LABEL, ISSUE_LABELS } from "../lib/inventory";
+import { ASSET_STATUS_CLASS, ASSET_STATUS_LABEL, formatPrice, ISSUE_LABELS } from "../lib/inventory";
+import MultiSelect from "../components/MultiSelect";
 
 const PER_PAGE = 200;
 
-const FILTERS = ["q", "category_id", "status", "origin", "owner_id", "department", "platform", "device_status", "group_id", "compliance", "issue", "os_version", "tag"] as const;
+const FILTERS = ["q", "origin", "owner_id", "platform", "device_status", "compliance", "issue", "os_version", "tag"] as const;
+/** Filtros que admiten varios valores (se repiten en la URL). */
+const MULTI = ["category_id", "status", "department", "group_id"] as const;
+/** Valor del filtro de departamento para «Sin departamento». */
+const NO_DEPT = "__none__";
+const COLUMNS_KEY = "mdm.inventory.hidden-columns";
 
 /** Los enlaces antiguos a /dispositivos?… llevan al inventario de equipos con agente con los mismos filtros. */
 export function DevicesRedirect() {
@@ -34,6 +40,17 @@ const columns: Column<Asset>[] = [
   { key: "serial", label: "Número de serie", render: (a) => (a.serial ? <span className="mono">{a.serial}</span> : <span className="muted">—</span>) },
   { key: "owner", label: "Persona", sort: "owner", render: (a) => (a.owner ? <Link to={`/usuarios/${a.owner.id}`}>{a.owner.name}</Link> : <span className="muted">—</span>) },
   { key: "department", label: "Departamento", sort: "department", render: (a) => a.department || <span className="muted">—</span> },
+  {
+    key: "groups", label: "Grupo",
+    render: (a) => (a.groups?.length ? (
+      <span className="group-list">{a.groups.map((g, i) => (
+        <span key={g.id}>{i > 0 && ", "}<Link to={`/inventario?group_id=${g.id}`} className={g.dynamic ? "muted" : undefined}
+          title={g.dynamic ? "Grupo dinámico: ver sus equipos" : "Grupo principal: ver sus equipos"}>{g.name}</Link></span>
+      ))}</span>
+    ) : <span className="muted">—</span>),
+  },
+  { key: "price", label: "Precio", sort: "price", className: "num", render: (a) => (a.price != null ? formatPrice(a.price) : <span className="muted">—</span>) },
+  { key: "purchase_order", label: "Pedido", sort: "purchase_order", render: (a) => a.purchase_order || <span className="muted">—</span> },
   { key: "status", label: "Estado", sort: "status", render: (a) => <span className={ASSET_STATUS_CLASS[a.status]}>{ASSET_STATUS_LABEL[a.status]}</span> },
   {
     key: "origin", label: "Origen",
@@ -51,12 +68,13 @@ export default function Inventory() {
   const [search, setSearch] = useState(params.get("q") ?? "");
   const debounced = useDebounced(search.trim(), 300);
 
-  const update = (changes: Record<string, string | null>, keepPage = false) => {
+  const update = (changes: Record<string, string | string[] | null>, keepPage = false) => {
     setParams((prev) => {
       const next = new URLSearchParams(prev);
       for (const [k, v] of Object.entries(changes)) {
-        if (v) next.set(k, v);
-        else next.delete(k);
+        next.delete(k);
+        if (Array.isArray(v)) v.forEach((x) => next.append(k, x));
+        else if (v) next.set(k, v);
       }
       if (!keepPage) next.delete("page");
       return next;
@@ -80,14 +98,25 @@ export default function Inventory() {
     }
     return f;
   }, [params]);
+  const multi = useMemo(() => {
+    const m: Record<string, string[]> = {};
+    for (const k of MULTI) m[k] = params.getAll(k).filter(Boolean);
+    return m;
+  }, [params]);
+  // Lo que se manda a la API: «Sin departamento» va aparte.
+  const apiFilters = {
+    ...filters, ...multi,
+    department: multi.department.filter((d) => d !== NO_DEPT),
+    no_department: multi.department.includes(NO_DEPT) ? "1" : null,
+  };
   const sort = params.get("sort") ?? "name";
   const order = (params.get("order") as "asc" | "desc" | null) ?? "asc";
-  const hasFilters = Object.keys(filters).length > 0;
+  const hasFilters = Object.keys(filters).length > 0 || MULTI.some((k) => multi[k].length > 0);
   // Sin páginas: se cargan bloques de PER_PAGE según se baja por la lista.
-  const listQuery = query({ ...filters, sort: params.get("sort"), order: params.get("order") });
+  const listQuery = query({ ...apiFilters, sort: params.get("sort"), order: params.get("order") });
   const assets = useInfiniteQuery({
     queryKey: ["assets", listQuery, "all"],
-    queryFn: ({ pageParam }) => api<Page<Asset>>("GET", "/assets" + query({ ...filters, sort: params.get("sort"), order: params.get("order"), page: pageParam, per_page: PER_PAGE })),
+    queryFn: ({ pageParam }) => api<Page<Asset>>("GET", "/assets" + query({ ...apiFilters, sort: params.get("sort"), order: params.get("order"), page: pageParam, per_page: PER_PAGE })),
     initialPageParam: 1,
     getNextPageParam: (last) => (last.page * last.per_page < last.total ? last.page + 1 : undefined),
     placeholderData: keepPreviousData,
@@ -108,7 +137,24 @@ export default function Inventory() {
   const groups = useQuery({ queryKey: ["groups"], queryFn: () => api<Group[]>("GET", "/groups") });
   const departments = useQuery({ queryKey: ["asset-departments"], queryFn: () => api<string[]>("GET", "/assets/departments") });
   // Un departamento que llega por enlace y ya no tiene activos sigue apareciendo elegido.
-  const deptOptions = [...new Set([...(departments.data ?? []), ...(filters.department ? [filters.department] : [])])].sort((a, b) => a.localeCompare(b, "es"));
+  const deptOptions = [...new Set([...(departments.data ?? []), ...multi.department.filter((d) => d !== NO_DEPT)])].sort((a, b) => a.localeCompare(b, "es"));
+
+  // Columnas ocultas, recordadas en este navegador.
+  const [hidden, setHidden] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(COLUMNS_KEY) ?? "[]") as string[];
+    } catch {
+      return [];
+    }
+  });
+  const setHiddenCols = (h: string[]) => {
+    setHidden(h);
+    try {
+      localStorage.setItem(COLUMNS_KEY, JSON.stringify(h));
+    } catch { /* sin almacenamiento: solo dura la sesión */ }
+  };
+  const optional = columns.filter((c) => c.key !== "name");
+  const visibleColumns = columns.filter((c) => !hidden.includes(c.key));
   const pages = assets.data?.pages;
   const data = pages ? { items: pages.flatMap((p) => p.items), total: pages[0]?.total ?? 0 } : undefined;
 
@@ -139,6 +185,9 @@ export default function Inventory() {
       </select>
     </label>
   );
+  const multiSelect = (name: (typeof MULTI)[number], label: string, opts: [string, string][], all: string) => (
+    <MultiSelect label={label} all={all} options={opts} value={multi[name]} onChange={(v) => update({ [name]: v })} />
+  );
   const agentOnly = filters.origin === "agent";
 
   return (
@@ -151,21 +200,21 @@ export default function Inventory() {
         <div className="page-actions">
           {can("operator") && <Link className="btn btn-primary" to="/inventario/nuevo">Nuevo activo</Link>}
           {can("operator") && <Link className="btn" to="/inventario/importar">Importar</Link>}
-          <a className="btn" href={`/api/v1/assets.csv${query({ ...filters, sort: params.get("sort"), order: params.get("order") }) || "?"}`} download>Exportar CSV</a>
+          <a className="btn" href={`/api/v1/assets.csv${query({ ...apiFilters, sort: params.get("sort"), order: params.get("order") }) || "?"}`} download>Exportar CSV</a>
           <Link className="btn btn-quiet" to="/inventario/papelera">Papelera</Link>
         </div>
       </div>
 
       <div className="toolbar" role="search">
         <input type="search" aria-label="Buscar" placeholder="Buscar por nombre, serie, marca, persona…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        {select("category_id", "Categoría", (cats.data ?? []).map((c) => [c.id, c.name]), "Todas las categorías")}
-        {select("status", "Estado", Object.entries(ASSET_STATUS_LABEL), "Todos los estados")}
-        {select("department", "Departamento", deptOptions.map((d) => [d, d]), "Todos los departamentos")}
+        {multiSelect("category_id", "Categorías", (cats.data ?? []).map((c) => [c.id, c.name]), "Todas las categorías")}
+        {multiSelect("status", "Estados", Object.entries(ASSET_STATUS_LABEL), "Todos los estados")}
+        {multiSelect("department", "Departamentos", [...deptOptions.map((d): [string, string] => [d, d]), [NO_DEPT, "(Sin departamento)"]], "Todos los departamentos")}
+        {multiSelect("group_id", "Grupos", (groups.data ?? []).map((g) => [g.id, g.name]), "Todos los grupos")}
         {select("origin", "Origen", [["agent", "Con agente"], ["manual", "Manuales"]], "Con agente y manuales")}
         {agentOnly && select("platform", "Plataforma", [["windows", "Windows"], ["linux", "Linux"], ["android", "Android"]], "Todas las plataformas")}
         {agentOnly && select("device_status", "Conexión", [["online", "En línea"], ["offline", "Desconectado"], ["inactive", "Inactivo"], ["revoked", "Revocado"]], "Cualquier conexión")}
         {agentOnly && select("compliance", "Cumplimiento", [["compliant", "Cumple"], ["noncompliant", "No cumple"], ["unknown", "Desconocido"]], "Cualquier cumplimiento")}
-        {agentOnly && select("group_id", "Grupo", (groups.data ?? []).map((g) => [g.id, g.name]), "Todos los grupos")}
         {(filters.issue || filters.owner_id || filters.os_version || filters.tag) && (
           <span className="tag">
             {filters.issue ? ISSUE_LABELS[filters.issue] ?? filters.issue : filters.owner_id ? "De una persona"
@@ -175,6 +224,11 @@ export default function Inventory() {
           </span>
         )}
         {hasFilters && <button className="btn btn-quiet" onClick={clearFilters}>Quitar filtros</button>}
+        <span style={{ marginLeft: "auto" }}>
+          <MultiSelect label="Columnas" all="Columnas" text="Columnas" options={optional.map((c) => [c.key, c.label])}
+            value={optional.filter((c) => !hidden.includes(c.key)).map((c) => c.key)}
+            onChange={(shown) => setHiddenCols(optional.filter((c) => !shown.includes(c.key)).map((c) => c.key))} />
+        </span>
       </div>
 
       {assets.error ? (
@@ -191,7 +245,7 @@ export default function Inventory() {
           {selected.size > 0 && (
             <div className="action-bar" role="toolbar" aria-label="Selección">
               <span className="small"><strong>{selected.size === 1 ? "1 seleccionado" : `${selected.size} seleccionados`}</strong></span>
-              {can("operator") && <button className="btn btn-small" onClick={() => setBulk(true)}>Cambiar estado, categoría o persona</button>}
+              {can("operator") && <button className="btn btn-small" onClick={() => setBulk(true)}>Cambiar en bloque…</button>}
               {can("admin") && selected.size === 2 && <button className="btn btn-small" onClick={() => setMerge(true)}>Fusionar</button>}
               <button className="btn btn-quiet" onClick={() => setSelected(new Map())}>Quitar selección</button>
             </div>
@@ -208,7 +262,7 @@ export default function Inventory() {
           <DataTable columns={[{
             key: "select", label: "Seleccionar", hideLabel: true, className: "col-select",
             render: (a: Asset) => <input type="checkbox" aria-label={`Seleccionar ${a.name}`} checked={selected.has(a.id)} onChange={() => toggle(a)} />,
-          }, ...columns]} rows={data.items} rowKey={(a) => a.id} sort={sort} order={order} onSort={onSort}
+          }, ...visibleColumns]} rows={data.items} rowKey={(a) => a.id} sort={sort} order={order} onSort={onSort}
             loading={assets.isPlaceholderData} caption="Inventario" />
           <div ref={sentinel} className="list-footer small muted" style={{ marginTop: "0.75rem", display: "flex", gap: "1rem", alignItems: "center" }}>
             <span>{data.items.length === data.total ? `${data.total} ${data.total === 1 ? "activo" : "activos"}` : `Mostrando ${data.items.length} de ${data.total}`}</span>
@@ -224,18 +278,26 @@ export default function Inventory() {
         <MergeDialog a={[...selected.values()][0]} b={[...selected.values()][1]} onClose={() => setMerge(false)}
           onDone={(id) => { setMerge(false); setSelected(new Map()); navigate(`/inventario/${id}`); }} />
       )}
-      {bulk && <BulkDialog ids={[...selected.keys()]} categories={cats.data ?? []} onClose={(done) => { setBulk(false); if (done) setSelected(new Map()); }} />}
+      {bulk && <BulkDialog ids={[...selected.keys()]} categories={cats.data ?? []}
+        groups={(groups.data ?? []).filter((g) => (g.kind ?? "static") === "static")}
+        agentCount={[...selected.values()].filter((a) => a.device_id).length} onClose={(done) => { setBulk(false); if (done) setSelected(new Map()); }} />}
     </>
   );
 }
 
-function BulkDialog({ ids, categories, onClose }: { ids: string[]; categories: Category[]; onClose(done: boolean): void }) {
+function BulkDialog({ ids, categories, groups, agentCount, onClose }: {
+  ids: string[]; categories: Category[]; groups: Group[]; agentCount: number; onClose(done: boolean): void;
+}) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<AssetStatus | "">("");
   const [category, setCategory] = useState("");
   const [owner, setOwner] = useState<PersonRef | null>(null);
   const [ownerMode, setOwnerMode] = useState<"keep" | "set" | "clear">("keep");
   const [location, setLocation] = useState("");
+  const [group, setGroup] = useState("");
+  const [order, setOrder] = useState("");
+  const [supplier, setSupplier] = useState("");
+  const [price, setPrice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -246,6 +308,15 @@ function BulkDialog({ ids, categories, onClose }: { ids: string[]; categories: C
     if (ownerMode === "clear") body.owner_id = "";
     if (ownerMode === "set" && owner) body.owner_id = owner.id;
     if (location.trim()) body.location = location.trim();
+    if (group) body.group_id = group === "-" ? "" : group;
+    if (order.trim()) body.purchase_order = order.trim();
+    if (supplier.trim()) body.supplier = supplier.trim();
+    if (price.trim() === "-") body.price = null;
+    else if (price.trim()) {
+      const p = Number(price.replace(/\s|€/g, "").replace(",", "."));
+      if (!Number.isFinite(p) || p < 0) return setError("El precio debe ser un número, por ejemplo 199,90.");
+      body.price = p;
+    }
     if (Object.keys(body).length === 1) return setError("Elige al menos un cambio.");
     setBusy(true);
     try {
@@ -284,6 +355,18 @@ function BulkDialog({ ids, categories, onClose }: { ids: string[]; categories: C
         </label>
         {ownerMode === "set" && <PersonPicker label="Asignar a" value={owner} onChange={setOwner} required />}
         <label className="field"><span>Ubicación</span><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="No cambiar" /></label>
+        <label className="field"><span>Grupo {agentCount < ids.length && <span className="hint">solo los {agentCount} con agente</span>}</span>
+          <select value={group} onChange={(e) => setGroup(e.target.value)} disabled={agentCount === 0}>
+            <option value="">No cambiar</option>
+            {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            <option value="-">Quitar del grupo</option>
+          </select>
+        </label>
+        <div className="edit-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+          <label className="field"><span>Pedido de compra</span><input value={order} onChange={(e) => setOrder(e.target.value)} placeholder="No cambiar" maxLength={200} /></label>
+          <label className="field"><span>Proveedor</span><input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="No cambiar" maxLength={200} /></label>
+          <label className="field"><span>Precio (€)</span><input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="No cambiar" title="Escribe - para borrarlo" /></label>
+        </div>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="dialog-actions">
           <button className="btn" onClick={() => onClose(false)} disabled={busy}>Cancelar</button>

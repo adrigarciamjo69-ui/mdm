@@ -75,10 +75,12 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
 }
 
 /** Construye una consulta omitiendo los valores vacíos. */
-export function query(params: Record<string, string | number | undefined | null>): string {
+export function query(params: Record<string, string | number | string[] | undefined | null>): string {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    // Una lista repite el parámetro: ?department=A&department=B.
+    if (Array.isArray(v)) v.filter((x) => x !== "").forEach((x) => q.append(k, x));
+    else if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
   }
   const s = q.toString();
   return s ? "?" + s : "";

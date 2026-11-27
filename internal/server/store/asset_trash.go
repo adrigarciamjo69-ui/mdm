@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -81,6 +82,13 @@ type AssetBulk struct {
 	// OwnerID: puntero a nil quita el dueño.
 	OwnerID  **uuid.UUID
 	Location *string
+	// GroupID cambia el grupo estático del equipo enlazado (puntero a nil lo
+	// quita). Los activos sin equipo no se ven afectados.
+	GroupID       **uuid.UUID
+	PurchaseOrder *string
+	Supplier      *string
+	// Price: puntero a nil lo borra.
+	Price **float64
 }
 
 // BulkUpdateAssets aplica los cambios a los activos vivos indicados y
@@ -99,14 +107,57 @@ func (s *Store) BulkUpdateAssets(ctx context.Context, ids []uuid.UUID, b AssetBu
 	if setOwner {
 		owner = *b.OwnerID
 	}
+	setPrice := b.Price != nil
+	var price *float64
+	if setPrice {
+		price = *b.Price
+		if price != nil && *price < 0 {
+			return 0, ErrInvalid
+		}
+	}
+	// Elegir la persona a mano la bloquea (si no, la siguiente sesión del
+	// equipo la cambiaría); quitarla vuelve a dejar que siga a la sesión.
 	tag, err := tx.Exec(ctx, `UPDATE assets SET
 	        status = COALESCE($2, status),
 	        category_auto = category_auto AND $3::uuid IS NULL, category_id = COALESCE($3, category_id),
 	        owner_id = CASE WHEN $4 THEN $5::uuid ELSE owner_id END,
-	        location = COALESCE($6, location), updated_at = now()
-	    WHERE id = ANY($1) AND deleted_at IS NULL`, ids, b.Status, b.CategoryID, setOwner, owner, b.Location)
+	        owner_locked = CASE WHEN $4 THEN $5::uuid IS NOT NULL ELSE owner_locked END,
+	        location = COALESCE($6, location),
+	        purchase_order = COALESCE($7, purchase_order), supplier = COALESCE($8, supplier),
+	        price = CASE WHEN $9 THEN $10::numeric ELSE price END,
+	        updated_at = now()
+	    WHERE id = ANY($1) AND deleted_at IS NULL`, ids, b.Status, b.CategoryID, setOwner, owner, b.Location,
+		b.PurchaseOrder, b.Supplier, setPrice, price)
 	if err != nil {
 		return 0, assetUniqueErr(err)
+	}
+	if b.GroupID != nil {
+		rows, err := tx.Query(ctx, `UPDATE devices d SET group_id = $2 FROM assets a
+		    WHERE a.id = ANY($1) AND a.deleted_at IS NULL AND d.id = a.device_id RETURNING d.id`, ids, *b.GroupID)
+		if err != nil {
+			if isForeignKeyViolation(err) {
+				return 0, ErrBadReference
+			}
+			return 0, err
+		}
+		var devs []uuid.UUID
+		for rows.Next() {
+			var id uuid.UUID
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return 0, err
+			}
+			devs = append(devs, id)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return 0, err
+		}
+		for _, d := range devs {
+			if err := EnqueueRecomputeDevice(ctx, tx, d, time.Now()); err != nil {
+				return 0, err
+			}
+		}
 	}
 	for _, id := range ids {
 		if err := syncDeviceUser(ctx, tx, id); err != nil {

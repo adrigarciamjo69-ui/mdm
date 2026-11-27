@@ -149,13 +149,17 @@ func (a *api) deviceFilter(w http.ResponseWriter, r *http.Request) (store.Device
 		badRequest(w, "El orden debe ser asc o desc.")
 		return f, false
 	}
-	if v := q.Get("group_id"); v != "" {
+	// group_id puede repetirse: el equipo está en cualquiera de ellos.
+	for _, v := range q["group_id"] {
+		if v == "" {
+			continue
+		}
 		id, err := uuid.Parse(v)
 		if err != nil {
 			badRequest(w, "El grupo indicado no es válido.")
 			return f, false
 		}
-		f.GroupID = &id
+		f.GroupIDs = append(f.GroupIDs, id)
 	}
 	return f, true
 }

@@ -2,6 +2,7 @@ package adminapi
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -57,6 +58,14 @@ type assetJSON struct {
 	// al usuario con sesión en el equipo.
 	OwnerLocked      bool `json:"owner_locked"`
 	DepartmentLocked bool `json:"department_locked"`
+	// Groups son los grupos del equipo enlazado (el estático y los dinámicos).
+	Groups []groupRefJSON `json:"groups"`
+}
+
+type groupRefJSON struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Dynamic bool   `json:"dynamic"`
 }
 
 func dateStr(t *time.Time) string {
@@ -84,6 +93,10 @@ func (a *api) assetToJSON(r store.AssetRow) assetJSON {
 	if r.Device != nil {
 		d := a.deviceToJSON(*r.Device)
 		out.Device = &d
+	}
+	out.Groups = make([]groupRefJSON, 0, len(r.Groups))
+	for _, g := range r.Groups {
+		out.Groups = append(out.Groups, groupRefJSON{ID: g.ID.String(), Name: g.Name, Dynamic: g.Dynamic})
 	}
 	return out
 }
@@ -206,12 +219,37 @@ func (a *api) assetStoreError(w http.ResponseWriter, r *http.Request, err error)
 
 func (a *api) assetFilter(w http.ResponseWriter, r *http.Request) (store.AssetFilter, bool) {
 	q := r.URL.Query()
-	f := store.AssetFilter{Q: strings.TrimSpace(q.Get("q")), Status: q.Get("status"), Origin: q.Get("origin"),
-		Department: strings.TrimSpace(q.Get("department")), Trash: q.Get("trash") == "1",
+	f := store.AssetFilter{Q: strings.TrimSpace(q.Get("q")), Origin: q.Get("origin"), Trash: q.Get("trash") == "1",
 		Sort: q.Get("sort"), Order: strings.ToLower(q.Get("order"))}
-	if f.Status != "" && !store.ValidAssetStatus(f.Status) {
-		badRequest(w, "Estado desconocido.")
-		return f, false
+	// status, department y category_id pueden repetirse: vale cualquiera.
+	for _, v := range q["status"] {
+		if v == "" {
+			continue
+		}
+		if !store.ValidAssetStatus(v) {
+			badRequest(w, "Estado desconocido.")
+			return f, false
+		}
+		f.Statuses = append(f.Statuses, v)
+	}
+	for _, v := range q["department"] {
+		if v = strings.TrimSpace(v); v != "" {
+			f.Departments = append(f.Departments, v)
+		}
+	}
+	if q.Get("no_department") == "1" {
+		f.Departments = append(f.Departments, "")
+	}
+	for _, v := range q["category_id"] {
+		if v == "" {
+			continue
+		}
+		id, err := uuid.Parse(v)
+		if err != nil {
+			badRequest(w, "El parámetro category_id no es válido.")
+			return f, false
+		}
+		f.CategoryIDs = append(f.CategoryIDs, id)
 	}
 	if f.Origin != "" && f.Origin != "agent" && f.Origin != "manual" {
 		badRequest(w, "El origen debe ser agent o manual.")
@@ -225,7 +263,7 @@ func (a *api) assetFilter(w http.ResponseWriter, r *http.Request) (store.AssetFi
 		badRequest(w, "El orden debe ser asc o desc.")
 		return f, false
 	}
-	for name, dst := range map[string]**uuid.UUID{"category_id": &f.CategoryID, "owner_id": &f.OwnerID} {
+	for name, dst := range map[string]**uuid.UUID{"owner_id": &f.OwnerID} {
 		if v := q.Get(name); v != "" {
 			id, err := uuid.Parse(v)
 			if err != nil {
@@ -295,7 +333,7 @@ func (a *api) exportAssets(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("\ufeff"))
 	cw := csv.NewWriter(w)
 	_ = cw.Write([]string{"Nombre", "Categoría", "Marca", "Modelo", "Número de serie", "Etiqueta", "Estado", "Persona", "Correo",
-		"Departamento", "Ubicación", "Origen", "Equipo", "Precio", "Fecha de compra", "Garantía hasta", "Pedido", "Proveedor", "Notas"})
+		"Departamento", "Ubicación", "Origen", "Equipo", "Precio", "Fecha de compra", "Garantía hasta", "Pedido", "Proveedor", "Notas", "Grupos"})
 	for _, row := range rows {
 		x := row.Asset
 		origin, host := "Manual", ""
@@ -309,11 +347,19 @@ func (a *api) exportAssets(w http.ResponseWriter, r *http.Request) {
 		_ = cw.Write([]string{csvSafe(x.Name), csvSafe(x.CategoryName), csvSafe(x.Brand), csvSafe(x.Model), csvSafe(x.Serial),
 			csvSafe(x.AssetTag), assetStatusLabels[x.Status], csvSafe(row.OwnerName), csvSafe(row.OwnerEmail), csvSafe(x.Department),
 			csvSafe(x.Location), origin, csvSafe(host), price, dateStr(x.PurchaseDate), dateStr(x.WarrantyUntil),
-			csvSafe(x.PurchaseOrder), csvSafe(x.Supplier), csvSafe(x.Notes)})
+			csvSafe(x.PurchaseOrder), csvSafe(x.Supplier), csvSafe(x.Notes), csvSafe(groupNames(row.Groups))})
 	}
 	cw.Flush()
 	admin := adminFrom(r.Context())
 	a.d.Audit.Log(r.Context(), audit.Entry{Actor: &admin, Action: audit.AssetsExported, Details: map[string]any{"rows": len(rows)}, IP: a.ip(r)})
+}
+
+func groupNames(gs []store.GroupRef) string {
+	names := make([]string, 0, len(gs))
+	for _, g := range gs {
+		names = append(names, g.Name)
+	}
+	return strings.Join(names, ", ")
 }
 
 // loadAsset lee el activo de la ruta (incluidos los de la papelera).
@@ -601,6 +647,12 @@ func (a *api) bulkAssets(w http.ResponseWriter, r *http.Request) {
 		CategoryID *string  `json:"category_id"`
 		OwnerID    *string  `json:"owner_id"`
 		Location   *string  `json:"location"`
+		// group_id "" quita el grupo; solo afecta a los activos con equipo.
+		GroupID       *string `json:"group_id"`
+		PurchaseOrder *string `json:"purchase_order"`
+		Supplier      *string `json:"supplier"`
+		// Price: un número lo fija; null lo borra; ausente no lo toca.
+		Price json.RawMessage `json:"price"`
 	}
 	if !httpx.DecodeJSON(w, r, maxBody, &body) {
 		return
@@ -654,7 +706,44 @@ func (a *api) bulkAssets(w http.ResponseWriter, r *http.Request) {
 		l := strings.TrimSpace(*body.Location)
 		b.Location = &l
 	}
-	if b.Status == nil && b.CategoryID == nil && b.OwnerID == nil && b.Location == nil {
+	if body.GroupID != nil {
+		var gid *uuid.UUID
+		if *body.GroupID != "" {
+			id, err := uuid.Parse(*body.GroupID)
+			if err != nil {
+				badRequest(w, "El grupo elegido no es válido.")
+				return
+			}
+			if _, ok := a.requireStaticGroup(w, r, id); !ok {
+				return
+			}
+			gid = &id
+		}
+		b.GroupID = &gid
+	}
+	for _, f := range []struct {
+		in  *string
+		out **string
+	}{{body.PurchaseOrder, &b.PurchaseOrder}, {body.Supplier, &b.Supplier}} {
+		if f.in != nil {
+			v := strings.TrimSpace(*f.in)
+			if len([]rune(v)) > maxAssetText {
+				badRequest(w, "Los campos de texto no pueden tener más de 200 caracteres.")
+				return
+			}
+			*f.out = &v
+		}
+	}
+	if len(body.Price) > 0 {
+		var p *float64
+		if err := json.Unmarshal(body.Price, &p); err != nil || (p != nil && *p < 0) {
+			badRequest(w, "El precio debe ser un número positivo.")
+			return
+		}
+		b.Price = &p
+	}
+	if b.Status == nil && b.CategoryID == nil && b.OwnerID == nil && b.Location == nil && b.GroupID == nil &&
+		b.PurchaseOrder == nil && b.Supplier == nil && b.Price == nil {
 		badRequest(w, "No se ha indicado ningún cambio.")
 		return
 	}
@@ -665,7 +754,8 @@ func (a *api) bulkAssets(w http.ResponseWriter, r *http.Request) {
 	}
 	admin := adminFrom(r.Context())
 	a.d.Audit.Log(r.Context(), audit.Entry{Actor: &admin, Action: audit.AssetsBulkUpdated, TargetType: "asset",
-		Details: map[string]any{"ids": body.IDs, "status": body.Status, "category_id": body.CategoryID, "owner_id": body.OwnerID, "location": body.Location}, IP: a.ip(r)})
+		Details: map[string]any{"ids": body.IDs, "status": body.Status, "category_id": body.CategoryID, "owner_id": body.OwnerID, "location": body.Location,
+			"group_id": body.GroupID, "purchase_order": body.PurchaseOrder, "supplier": body.Supplier, "price": body.Price}, IP: a.ip(r)})
 	httpx.WriteJSON(w, http.StatusOK, map[string]int{"updated": n})
 }
 

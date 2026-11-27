@@ -367,6 +367,8 @@ export interface Asset {
   owner_locked: boolean;
   /** El departamento no sigue al de la persona ni a la sesión. */
   department_locked: boolean;
+  /** Grupos del equipo enlazado: el principal (estático) y los dinámicos. */
+  groups?: { id: string; name: string; dynamic: boolean }[];
 }
 
 export interface Category {

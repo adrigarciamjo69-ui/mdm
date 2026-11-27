@@ -42,9 +42,12 @@ describe("Inventario", () => {
     const calls = setup();
     const { location } = renderApp("/inventario");
     await screen.findByRole("link", { name: "Monitor sala" });
-    await userEvent.setup().selectOptions(screen.getByLabelText("Categoría"), "c-mon");
-    await waitFor(() => expect(location()).toContain("category_id=c-mon"));
-    await waitFor(() => expect(calls.some((c) => c.path.startsWith("/assets?") && c.path.includes("category_id=c-mon"))).toBe(true));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^Categorías:/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Monitor" }));
+    await user.click(screen.getByRole("checkbox", { name: "Portátil" }));
+    await waitFor(() => expect(location()).toContain("category_id=c-mon&category_id=c-lap"));
+    await waitFor(() => expect(calls.some((c) => c.path.startsWith("/assets?") && c.path.includes("category_id=c-mon&category_id=c-lap"))).toBe(true));
   });
 
   it("/dispositivos lleva al inventario filtrado por equipos con agente", async () => {
@@ -69,7 +72,7 @@ describe("Inventario", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("checkbox", { name: "Seleccionar Monitor sala" }));
     expect(screen.queryByRole("button", { name: "Reiniciar" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Cambiar estado, categoría o persona" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cambiar en bloque…" })).toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: "Seleccionar PC-CONTA-07" }));
     expect(screen.getByRole("button", { name: "Reiniciar" })).toBeInTheDocument();
   });
@@ -80,7 +83,7 @@ describe("Inventario", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("checkbox", { name: "Seleccionar Monitor sala" }));
     await user.click(screen.getByRole("checkbox", { name: "Seleccionar PC-CONTA-07" }));
-    await user.click(screen.getByRole("button", { name: "Cambiar estado, categoría o persona" }));
+    await user.click(screen.getByRole("button", { name: "Cambiar en bloque…" }));
     const dialog = within(screen.getByRole("dialog"));
     await user.selectOptions(dialog.getByLabelText("Estado"), "en_reparacion");
     await user.click(dialog.getByRole("button", { name: "Aplicar" }));
@@ -182,9 +185,13 @@ describe("Inventario · departamento y lista sin páginas", () => {
     const row = within((await screen.findByRole("link", { name: "PC-CONTA-07" })).closest("tr")!);
     expect(row.getByText("Finanzas")).toBeInTheDocument();
     const user = userEvent.setup();
-    await waitFor(() => expect(screen.getByRole("option", { name: "Taller" })).toBeInTheDocument());
-    await user.selectOptions(screen.getByLabelText("Departamento"), "Taller");
-    await waitFor(() => expect(calls.some((c) => c.path.startsWith("/assets?") && c.path.includes("department=Taller"))).toBe(true));
+    await user.click(screen.getByRole("button", { name: /^Departamentos:/ }));
+    await user.click(await screen.findByRole("checkbox", { name: "Taller" }));
+    await user.click(screen.getByRole("checkbox", { name: "Finanzas" }));
+    await user.click(screen.getByRole("checkbox", { name: "(Sin departamento)" }));
+    await waitFor(() => expect(calls.some((c) => c.path.startsWith("/assets?") && c.path.includes("department=Taller&department=Finanzas")
+      && c.path.includes("no_department=1"))).toBe(true));
+    expect(screen.getByRole("button", { name: /^Departamentos: Finanzas, Taller, \(Sin departamento\)/ })).toBeInTheDocument();
   });
 
   it("pide bloques grandes y «Cargar más» trae el siguiente sin cambiar de página", async () => {
@@ -204,5 +211,48 @@ describe("Inventario · departamento y lista sin páginas", () => {
     expect(screen.getByRole("link", { name: "PC-CONTA-07" })).toBeInTheDocument();
     expect(screen.getByText("3 activos")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cargar más" })).toBeNull();
+  });
+});
+
+describe("Inventario · grupos, compra y cambios en bloque", () => {
+  const withGroup = { ...agentAsset, price: 899.5, purchase_order: "PO-114", groups: [{ id: "g1", name: "Oficina Bilbao", dynamic: false }, { id: "g2", name: "Portátiles", dynamic: true }] };
+
+  it("muestra grupo, precio y pedido, y se pueden ocultar columnas", async () => {
+    setup({ "GET /assets": { body: page([withGroup]) }, "GET /assets/departments": { body: [] } });
+    renderApp("/inventario");
+    const row = within((await screen.findByRole("link", { name: "PC-CONTA-07" })).closest("tr")!);
+    expect(row.getByRole("link", { name: "Oficina Bilbao" })).toHaveAttribute("href", "/inventario?group_id=g1");
+    expect(row.getByRole("link", { name: "Portátiles" })).toBeInTheDocument();
+    expect(row.getByText("PO-114")).toBeInTheDocument();
+    expect(row.getByText(/899,50/)).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^Columnas/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Pedido" }));
+    expect(screen.queryByText("PO-114")).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Pedido" })).toBeNull();
+  });
+
+  it("cambia el grupo, el pedido y el precio de varios a la vez", async () => {
+    const calls = setup({
+      "GET /assets": { body: page([withGroup, { ...agentAsset, id: "a3", device_id: "d3", name: "PC-CONTA-08" }]) },
+      "GET /assets/departments": { body: [] },
+      "GET /groups": { body: [{ id: "g1", name: "Oficina Bilbao", kind: "static", description: "", device_count: 1 },
+        { id: "g2", name: "Portátiles", kind: "dynamic", description: "", device_count: 1 }] },
+      "POST /assets/bulk": { body: { updated: 2 } },
+    });
+    renderApp("/inventario");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("checkbox", { name: "Seleccionar PC-CONTA-07" }));
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar PC-CONTA-08" }));
+    await user.click(screen.getByRole("button", { name: "Cambiar en bloque…" }));
+    const dialog = within(screen.getByRole("dialog"));
+    const groupSel = dialog.getByLabelText(/^Grupo/);
+    expect(within(groupSel).queryByRole("option", { name: "Portátiles" })).toBeNull();
+    await user.selectOptions(groupSel, "g1");
+    await user.type(dialog.getByLabelText("Pedido de compra"), "PO-200");
+    await user.type(dialog.getByLabelText("Precio (€)"), "1.050,5".replace(".", ""));
+    await user.click(dialog.getByRole("button", { name: "Aplicar" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    expect(calls.find((c) => c.method === "POST")!.body).toEqual({ ids: ["a2", "a3"], group_id: "g1", purchase_order: "PO-200", price: 1050.5 });
   });
 });

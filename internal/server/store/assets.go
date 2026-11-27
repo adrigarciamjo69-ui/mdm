@@ -323,7 +323,12 @@ type AssetFilter struct {
 	Origin     string // agent | manual
 	Department string
 	CategoryID *uuid.UUID
-	OwnerID    *uuid.UUID
+	// Statuses, Departments y CategoryIDs admiten varios valores (cualquiera
+	// de ellos); se suman a Status, Department y CategoryID.
+	Statuses    []string
+	Departments []string
+	CategoryIDs []uuid.UUID
+	OwnerID     *uuid.UUID
 	// Device filtra por datos del equipo; si tiene algo, solo salen activos con agente.
 	Device DeviceFilter
 	// Trash lista la papelera en lugar de los activos vivos.
@@ -342,17 +347,28 @@ type AssetRow struct {
 	// OwnerDepartment es el departamento de la persona en Entra ID.
 	OwnerDepartment string
 	Device          *DeviceRow
+	// Groups son los grupos del equipo: el estático y los dinámicos.
+	Groups []GroupRef
+}
+
+// GroupRef es un grupo al que pertenece un equipo.
+type GroupRef struct {
+	ID      uuid.UUID
+	Name    string
+	Dynamic bool
 }
 
 var assetSorts = map[string]string{
-	"name":       "lower(a.name)",
-	"category":   "lower(c.name)",
-	"status":     "a.status",
-	"owner":      "lower(u.display_name)",
-	"department": "lower(a.department)",
-	"updated_at": "a.updated_at",
-	"created_at": "a.created_at",
-	"deleted_at": "a.deleted_at",
+	"name":           "lower(a.name)",
+	"category":       "lower(c.name)",
+	"status":         "a.status",
+	"owner":          "lower(u.display_name)",
+	"department":     "lower(a.department)",
+	"price":          "a.price",
+	"purchase_order": "lower(a.purchase_order)",
+	"updated_at":     "a.updated_at",
+	"created_at":     "a.created_at",
+	"deleted_at":     "a.deleted_at",
 }
 
 // AssetDepartments devuelve los departamentos distintos de los activos que no
@@ -381,7 +397,7 @@ func ValidAssetSort(sort string) bool {
 }
 
 func (f DeviceFilter) empty() bool {
-	return f.Platform == "" && f.OSVersion == "" && f.Tag == "" && f.Status == "" && f.Compliance == "" && f.Issue == "" && f.GroupID == nil
+	return f.Platform == "" && f.OSVersion == "" && f.Tag == "" && f.Status == "" && f.Compliance == "" && f.Issue == "" && f.GroupID == nil && len(f.GroupIDs) == 0
 }
 
 func (f AssetFilter) where() (string, []any) {
@@ -412,14 +428,25 @@ func (f AssetFilter) where() (string, []any) {
 		    OR a.asset_tag ILIKE %[1]s OR a.location ILIKE %[1]s OR u.display_name ILIKE %[1]s OR u.email ILIKE %[1]s
 		    OR COALESCE(d.hostname, '') ILIKE %[1]s)`, p))
 	}
+	statuses, deps, cats := f.Statuses, f.Departments, f.CategoryIDs
 	if f.Status != "" {
-		conds = append(conds, "a.status = "+arg(f.Status))
+		statuses = append(statuses, f.Status)
 	}
 	if f.Department != "" {
-		conds = append(conds, "a.department = "+arg(f.Department))
+		deps = append(deps, f.Department)
 	}
 	if f.CategoryID != nil {
-		conds = append(conds, "a.category_id = "+arg(*f.CategoryID))
+		cats = append(cats, *f.CategoryID)
+	}
+	if len(statuses) > 0 {
+		conds = append(conds, "a.status = ANY("+arg(statuses)+")")
+	}
+	if len(deps) > 0 {
+		// "" (sin departamento) también se puede elegir.
+		conds = append(conds, "a.department = ANY("+arg(deps)+")")
+	}
+	if len(cats) > 0 {
+		conds = append(conds, "a.category_id = ANY("+arg(cats)+")")
 	}
 	if f.OwnerID != nil {
 		conds = append(conds, "a.owner_id = "+arg(*f.OwnerID))
@@ -480,15 +507,44 @@ func (s *Store) ListAssets(ctx context.Context, f AssetFilter) ([]AssetRow, int,
 		if err != nil {
 			return nil, 0, err
 		}
+		groups, err := s.deviceGroupRefs(ctx, devIDs)
+		if err != nil {
+			return nil, 0, err
+		}
 		for i := range out {
 			if out[i].DeviceID != nil {
 				if d, ok := devs[*out[i].DeviceID]; ok {
 					out[i].Device = &d
 				}
+				out[i].Groups = groups[*out[i].DeviceID]
 			}
 		}
 	}
 	return out, total, nil
+}
+
+// deviceGroupRefs devuelve los grupos (estático primero, luego dinámicos por
+// nombre) de cada equipo.
+func (s *Store) deviceGroupRefs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID][]GroupRef, error) {
+	rows, err := s.pool.Query(ctx, `SELECT device_id, id, name, dynamic FROM (
+	        SELECT d.id AS device_id, g.id, g.name, false AS dynamic FROM devices d JOIN groups g ON g.id = d.group_id WHERE d.id = ANY($1)
+	        UNION
+	        SELECT m.device_id, g.id, g.name, true FROM group_members m JOIN groups g ON g.id = m.group_id WHERE m.device_id = ANY($1)
+	    ) x ORDER BY device_id, dynamic, lower(name)`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[uuid.UUID][]GroupRef{}
+	for rows.Next() {
+		var dev uuid.UUID
+		var g GroupRef
+		if err := rows.Scan(&dev, &g.ID, &g.Name, &g.Dynamic); err != nil {
+			return nil, err
+		}
+		out[dev] = append(out[dev], g)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) deviceRowsByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]DeviceRow, error) {
