@@ -171,3 +171,38 @@ describe("Pestaña Activo de un equipo", () => {
     expect(screen.getByText("Portátil")).toBeInTheDocument();
   });
 });
+
+describe("Inventario · departamento y lista sin páginas", () => {
+  it("muestra el departamento y filtra por él", async () => {
+    const calls = setup({
+      "GET /assets": { body: page([{ ...agentAsset, department: "Finanzas" }, asset()]) },
+      "GET /assets/departments": { body: ["Finanzas", "Taller"] },
+    });
+    renderApp("/inventario");
+    const row = within((await screen.findByRole("link", { name: "PC-CONTA-07" })).closest("tr")!);
+    expect(row.getByText("Finanzas")).toBeInTheDocument();
+    const user = userEvent.setup();
+    await waitFor(() => expect(screen.getByRole("option", { name: "Taller" })).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText("Departamento"), "Taller");
+    await waitFor(() => expect(calls.some((c) => c.path.startsWith("/assets?") && c.path.includes("department=Taller"))).toBe(true));
+  });
+
+  it("pide bloques grandes y «Cargar más» trae el siguiente sin cambiar de página", async () => {
+    const calls = setup({
+      "GET /assets": (c: { path: string }) => ({
+        body: /[?&]page=2(&|$)/.test(c.path)
+          ? page([asset({ id: "a9", name: "Monitor recepción" })], { total: 3, page: 2, per_page: 2 })
+          : page([agentAsset, asset()], { total: 3, page: 1, per_page: 2 }),
+      }),
+      "GET /assets/departments": { body: [] },
+    });
+    renderApp("/inventario");
+    expect(await screen.findByText("Mostrando 2 de 3")).toBeInTheDocument();
+    expect(calls.find((c) => c.path.startsWith("/assets?"))!.path).toContain("per_page=200");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Cargar más" }));
+    expect(await screen.findByRole("link", { name: "Monitor recepción" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "PC-CONTA-07" })).toBeInTheDocument();
+    expect(screen.getByText("3 activos")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cargar más" })).toBeNull();
+  });
+});

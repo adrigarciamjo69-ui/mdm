@@ -154,6 +154,7 @@ func (a *api) routes(r chi.Router) {
 
 	r.With(read).Get("/assets", a.listAssets)
 	r.With(read).Get("/assets.csv", a.exportAssets)
+	r.With(read).Get("/assets/departments", a.assetDepartments)
 	r.With(read).Get("/assets/import/template.csv", a.importTemplate)
 	r.With(operate).Post("/assets/import", a.importAssets)
 	r.With(operate).Post("/assets/bulk", a.bulkAssets)

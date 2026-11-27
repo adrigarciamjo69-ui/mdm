@@ -178,6 +178,16 @@ func (a *api) toInput(r *http.Request, in assetInputJSON) (store.AssetInput, str
 	return out, ""
 }
 
+// assetDepartments lista los departamentos que tienen los activos.
+func (a *api) assetDepartments(w http.ResponseWriter, r *http.Request) {
+	deps, err := a.d.Store.AssetDepartments(r.Context())
+	if err != nil {
+		a.serverError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, deps)
+}
+
 // assetStoreError responde a los errores conocidos del almacén.
 func (a *api) assetStoreError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {

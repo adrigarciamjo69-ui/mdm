@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, query } from "../api/client";
 import type { Asset, AssetStatus, Category, Group, Page, PersonRef } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import DataTable, { type Column } from "../components/DataTable";
-import Pagination from "../components/Pagination";
 import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
 import ActionBar from "../components/ActionBar";
@@ -13,6 +12,8 @@ import MergeDialog from "../components/MergeDialog";
 import PersonPicker from "../components/PersonPicker";
 import { useDebounced } from "../lib/hooks";
 import { ASSET_STATUS_CLASS, ASSET_STATUS_LABEL, ISSUE_LABELS } from "../lib/inventory";
+
+const PER_PAGE = 200;
 
 const FILTERS = ["q", "category_id", "status", "origin", "owner_id", "department", "platform", "device_status", "group_id", "compliance", "issue", "os_version", "tag"] as const;
 
@@ -32,6 +33,7 @@ const columns: Column<Asset>[] = [
   { key: "model", label: "Marca y modelo", render: (a) => [a.brand, a.model].filter(Boolean).join(" ") || <span className="muted">—</span> },
   { key: "serial", label: "Número de serie", render: (a) => (a.serial ? <span className="mono">{a.serial}</span> : <span className="muted">—</span>) },
   { key: "owner", label: "Persona", sort: "owner", render: (a) => (a.owner ? <Link to={`/usuarios/${a.owner.id}`}>{a.owner.name}</Link> : <span className="muted">—</span>) },
+  { key: "department", label: "Departamento", sort: "department", render: (a) => a.department || <span className="muted">—</span> },
   { key: "status", label: "Estado", sort: "status", render: (a) => <span className={ASSET_STATUS_CLASS[a.status]}>{ASSET_STATUS_LABEL[a.status]}</span> },
   {
     key: "origin", label: "Origen",
@@ -80,18 +82,35 @@ export default function Inventory() {
   }, [params]);
   const sort = params.get("sort") ?? "name";
   const order = (params.get("order") as "asc" | "desc" | null) ?? "asc";
-  const page = Math.max(1, Number(params.get("page")) || 1);
   const hasFilters = Object.keys(filters).length > 0;
-  const listQuery = query({ ...filters, sort: params.get("sort"), order: params.get("order"), page: page > 1 ? page : null });
-  const assets = useQuery({
-    queryKey: ["assets", listQuery],
-    queryFn: () => api<Page<Asset>>("GET", "/assets" + listQuery),
+  // Sin páginas: se cargan bloques de PER_PAGE según se baja por la lista.
+  const listQuery = query({ ...filters, sort: params.get("sort"), order: params.get("order") });
+  const assets = useInfiniteQuery({
+    queryKey: ["assets", listQuery, "all"],
+    queryFn: ({ pageParam }) => api<Page<Asset>>("GET", "/assets" + query({ ...filters, sort: params.get("sort"), order: params.get("order"), page: pageParam, per_page: PER_PAGE })),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page * last.per_page < last.total ? last.page + 1 : undefined),
     placeholderData: keepPreviousData,
     refetchInterval: 30_000,
   });
+  const sentinel = useRef<HTMLDivElement>(null);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = assets;
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || !hasNextPage || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((e) => {
+      if (e[0]?.isIntersecting && !isFetchingNextPage) void fetchNextPage();
+    }, { rootMargin: "600px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
   const cats = useQuery({ queryKey: ["asset-categories"], queryFn: () => api<Category[]>("GET", "/asset-categories") });
   const groups = useQuery({ queryKey: ["groups"], queryFn: () => api<Group[]>("GET", "/groups") });
-  const data = assets.data;
+  const departments = useQuery({ queryKey: ["asset-departments"], queryFn: () => api<string[]>("GET", "/assets/departments") });
+  // Un departamento que llega por enlace y ya no tiene activos sigue apareciendo elegido.
+  const deptOptions = [...new Set([...(departments.data ?? []), ...(filters.department ? [filters.department] : [])])].sort((a, b) => a.localeCompare(b, "es"));
+  const pages = assets.data?.pages;
+  const data = pages ? { items: pages.flatMap((p) => p.items), total: pages[0]?.total ?? 0 } : undefined;
 
   const toggle = (a: Asset) => setSelected((prev) => {
     const next = new Map(prev);
@@ -141,16 +160,17 @@ export default function Inventory() {
         <input type="search" aria-label="Buscar" placeholder="Buscar por nombre, serie, marca, persona…" value={search} onChange={(e) => setSearch(e.target.value)} />
         {select("category_id", "Categoría", (cats.data ?? []).map((c) => [c.id, c.name]), "Todas las categorías")}
         {select("status", "Estado", Object.entries(ASSET_STATUS_LABEL), "Todos los estados")}
+        {select("department", "Departamento", deptOptions.map((d) => [d, d]), "Todos los departamentos")}
         {select("origin", "Origen", [["agent", "Con agente"], ["manual", "Manuales"]], "Con agente y manuales")}
         {agentOnly && select("platform", "Plataforma", [["windows", "Windows"], ["linux", "Linux"], ["android", "Android"]], "Todas las plataformas")}
         {agentOnly && select("device_status", "Conexión", [["online", "En línea"], ["offline", "Desconectado"], ["inactive", "Inactivo"], ["revoked", "Revocado"]], "Cualquier conexión")}
         {agentOnly && select("compliance", "Cumplimiento", [["compliant", "Cumple"], ["noncompliant", "No cumple"], ["unknown", "Desconocido"]], "Cualquier cumplimiento")}
         {agentOnly && select("group_id", "Grupo", (groups.data ?? []).map((g) => [g.id, g.name]), "Todos los grupos")}
-        {(filters.issue || filters.owner_id || filters.department || filters.os_version || filters.tag) && (
+        {(filters.issue || filters.owner_id || filters.os_version || filters.tag) && (
           <span className="tag">
             {filters.issue ? ISSUE_LABELS[filters.issue] ?? filters.issue : filters.owner_id ? "De una persona"
-              : filters.department ? `Departamento: ${filters.department}` : filters.tag ? `Etiqueta: ${filters.tag}` : `Versión ${filters.os_version}`}{" "}
-            <button className="btn-quiet btn" style={{ minHeight: 0, padding: 0 }} onClick={() => update({ issue: null, owner_id: null, department: null, os_version: null, tag: null })}
+              : filters.tag ? `Etiqueta: ${filters.tag}` : `Versión ${filters.os_version}`}{" "}
+            <button className="btn-quiet btn" style={{ minHeight: 0, padding: 0 }} onClick={() => update({ issue: null, owner_id: null, os_version: null, tag: null })}
               aria-label="Quitar este filtro">✕</button>
           </span>
         )}
@@ -190,7 +210,14 @@ export default function Inventory() {
             render: (a: Asset) => <input type="checkbox" aria-label={`Seleccionar ${a.name}`} checked={selected.has(a.id)} onChange={() => toggle(a)} />,
           }, ...columns]} rows={data.items} rowKey={(a) => a.id} sort={sort} order={order} onSort={onSort}
             loading={assets.isPlaceholderData} caption="Inventario" />
-          <Pagination page={data.page} perPage={data.per_page} total={data.total} onChange={(p) => update({ page: p > 1 ? String(p) : null }, true)} />
+          <div ref={sentinel} className="list-footer small muted" style={{ marginTop: "0.75rem", display: "flex", gap: "1rem", alignItems: "center" }}>
+            <span>{data.items.length === data.total ? `${data.total} ${data.total === 1 ? "activo" : "activos"}` : `Mostrando ${data.items.length} de ${data.total}`}</span>
+            {hasNextPage && (
+              <button className="btn btn-small" disabled={isFetchingNextPage} onClick={() => void fetchNextPage()}>
+                {isFetchingNextPage ? "Cargando…" : "Cargar más"}
+              </button>
+            )}
+          </div>
         </>
       )}
       {merge && selected.size === 2 && (

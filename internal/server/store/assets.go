@@ -349,9 +349,29 @@ var assetSorts = map[string]string{
 	"category":   "lower(c.name)",
 	"status":     "a.status",
 	"owner":      "lower(u.display_name)",
+	"department": "lower(a.department)",
 	"updated_at": "a.updated_at",
 	"created_at": "a.created_at",
 	"deleted_at": "a.deleted_at",
+}
+
+// AssetDepartments devuelve los departamentos distintos de los activos que no
+// están en la papelera, para el filtro del inventario.
+func (s *Store) AssetDepartments(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT department FROM assets WHERE department <> '' AND deleted_at IS NULL ORDER BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }
 
 // ValidAssetSort informa de si sort es un criterio de ordenación admitido.

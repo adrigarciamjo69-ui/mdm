@@ -133,3 +133,23 @@ func TestAssets_ListFilters(t *testing.T) {
 		t.Fatalf("departamento: %v", got)
 	}
 }
+
+func TestAssets_DepartmentsAndSort(t *testing.T) {
+	s := storetest.New(t)
+	cat := category(t, s, "Monitor")
+	newAsset(t, s, store.AssetInput{CategoryID: cat, Name: "M1", Status: store.AssetInUse, Department: "Taller"})
+	newAsset(t, s, store.AssetInput{CategoryID: cat, Name: "M2", Status: store.AssetInUse, Department: "Finanzas"})
+	newAsset(t, s, store.AssetInput{CategoryID: cat, Name: "M3", Status: store.AssetInUse, Department: "Taller"})
+	newAsset(t, s, store.AssetInput{CategoryID: cat, Name: "M4", Status: store.AssetInUse})
+	deps, err := s.AssetDepartments(ctx)
+	if err != nil || len(deps) != 2 || deps[0] != "Finanzas" || deps[1] != "Taller" {
+		t.Fatalf("departamentos: %v %v", deps, err)
+	}
+	if !store.ValidAssetSort("department") {
+		t.Fatal("ordenar por departamento")
+	}
+	rows, n, err := s.ListAssets(ctx, store.AssetFilter{Department: "Taller", Sort: "department", PerPage: 10})
+	if err != nil || n != 2 || len(rows) != 2 {
+		t.Fatalf("filtro: n=%d err=%v", n, err)
+	}
+}
